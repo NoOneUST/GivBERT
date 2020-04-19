@@ -165,8 +165,241 @@ def extractSnliFeatures(datafolder, choice, batch_size, test=False):
     # save the output of the BertModel
     # save({'ids': ids, 'embs': embs}, self.saving_path)
 
-def getSnliFeatures(data_file):
+def LoadDatasets(args, task_cfg, ids, split="trainval"):
 
+    if "roberta" in args.bert_model:
+        tokenizer = RobertaTokenizer.from_pretrained(
+            args.bert_model, do_lower_case=args.do_lower_case
+        )
+    else:
+        tokenizer = BertTokenizer.from_pretrained(
+            args.bert_model, do_lower_case=args.do_lower_case
+        )
+
+    task_feature_reader1 = {}
+    task_feature_reader2 = {}
+    task = "TASK13"
+    if task_cfg[task]["features_h5path1"] not in task_feature_reader1:
+        task_feature_reader1[task_cfg[task]["features_h5path1"]] = None
+    if task_cfg[task]["features_h5path2"] not in task_feature_reader2:
+        task_feature_reader2[task_cfg[task]["features_h5path2"]] = None
+
+    # initilzie the feature reader
+    for features_h5path in task_feature_reader1.keys():
+        if features_h5path != "":
+            task_feature_reader1[features_h5path] = ImageFeaturesH5Reader(
+                features_h5path, args.in_memory
+            )
+    for features_h5path in task_feature_reader2.keys():
+        if features_h5path != "":
+            task_feature_reader2[features_h5path] = ImageFeaturesH5Reader(
+                features_h5path, args.in_memory
+            )
+
+    task_datasets_train = {}
+    task_datasets_val = {}
+    task_dataloader_train = {}
+    task_dataloader_val = {}
+    task_ids = []
+    task_batch_size = {}
+    task_num_iters = {}
+
+    task = "TASK13"
+    task_name = task_cfg[task]["name"]
+    task_ids.append(task)
+    batch_size = task_cfg[task]["batch_size"] // args.gradient_accumulation_steps
+    num_workers = args.num_workers
+    if args.local_rank != -1:
+        batch_size = int(batch_size / dist.get_world_size())
+        num_workers = int(num_workers / dist.get_world_size())
+
+    # num_workers = int(num_workers / len(ids))
+    logger.info(
+        "Loading %s Dataset with batch size %d"
+        % (task_cfg[task]["name"], batch_size)
+    )
+
+    task_datasets_train[task] = None
+    if "train" in split:
+        task_datasets_train[task] = DatasetMapTrain[task_name](
+            task=task_cfg[task]["name"],
+            dataroot=task_cfg[task]["dataroot"],
+            annotations_jsonpath=task_cfg[task]["train_annotations_jsonpath"],
+            split=task_cfg[task]["train_split"],
+            image_features_reader=task_feature_reader1[
+                task_cfg[task]["features_h5path1"]
+            ],
+            gt_image_features_reader=task_feature_reader2[
+                task_cfg[task]["features_h5path2"]
+            ],
+            tokenizer=tokenizer,
+            bert_model=args.bert_model,
+            clean_datasets=args.clean_train_sets,
+            padding_index=0,
+            max_seq_length=task_cfg[task]["max_seq_length"],
+            max_region_num=task_cfg[task]["max_region_num"],
+        )
+
+    task_datasets_val[task] = None
+    if "val" in split:
+        task_datasets_val[task] = DatasetMapTrain[task_name](
+            task=task_cfg[task]["name"],
+            dataroot=task_cfg[task]["dataroot"],
+            annotations_jsonpath=task_cfg[task]["val_annotations_jsonpath"],
+            split=task_cfg[task]["val_split"],
+            image_features_reader=task_feature_reader1[
+                task_cfg[task]["features_h5path1"]
+            ],
+            gt_image_features_reader=task_feature_reader2[
+                task_cfg[task]["features_h5path2"]
+            ],
+            tokenizer=tokenizer,
+            bert_model=args.bert_model,
+            clean_datasets=args.clean_train_sets,
+            padding_index=0,
+            max_seq_length=task_cfg[task]["max_seq_length"],
+            max_region_num=task_cfg[task]["max_region_num"],
+        )
+
+    task_num_iters[task] = 0
+    task_batch_sier=train_sampler,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            pin_memory=True,
+        )
+
+        task_num_iters[task] = len(task_dataloader_train[task])
+        task_batch_size[task] = batch_size
+
+    if "val" in split:
+        task_dataloader_val[task] = DataLoader(
+            task_datasets_val[task],
+            shuffle=False,
+            batch_size=batch_size,
+            num_workers=2,
+            pin_memory=True,
+        )O: check if this works with current data generator from disk that relies on next(file)
+            # (it doesn't return item back by index)
+            train_sampler = DistributedSampler(task_datasets_train[task])
+
+        task_dataloader_train[task] = DataLoader(
+            task_datasets_train[task],
+            sampler=train_sampler,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            pin_memory=True,
+        )
+
+        task_num_iters[task] = len(task_dataloader_train[task])
+        task_batch_size[task] = batch_size
+
+    if "val" in split:
+        task_dataloader_val[task] = DataLoader(
+            task_datasets_val[task],
+            shuffle=False,
+            batch_size=batch_size,
+            num_workers=2,
+            pin_memory=True,
+        )
+
+    return (
+        task_batch_size,
+        task_num_iters,
+        task_ids,
+        task_datasets_train,
+        task_datasets_val,
+        task_dataloader_train,
+        task_dataloader_val,
+    )
+
+
+def LoadDatasetEval(args, task_cfg, ids):
+
+    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=True)
+
+    task_feature_reader1 = {}
+    task_feature_reader2 = {}
+    task = "TASK13"
+    if task_cfg[task]["features_h5path1"] not in task_feature_reader1:
+        task_feature_reader1[task_cfg[task]["features_h5path1"]] = None
+    if task_cfg[task]["features_h5path2"] not in task_feature_reader2:
+        task_feature_reader2[task_cfg[task]["features_h5path2"]] = None
+
+    # initilzie the feature reader
+    for features_h5path in task_feature_reader1.keys():
+        if features_h5path != "":
+            task_feature_reader1[features_h5path] = ImageFeaturesH5Reader(
+                features_h5path, args.in_memory
+            )
+
+    for features_h5path in task_feature_reader2.keys():
+        if features_h5path != "":
+            task_feature_reader2[features_h5path] = ImageFeaturesH5Reader(
+                features_h5path, args.in_memory
+            )
+
+    task_datasets_val = {}
+    task_dataloader_val = {}
+    task_ids = []
+    task_batch_size = {}
+    task_num_iters = {}
+
+    task_id= "13"
+    task = "TASK" + task_id
+    task_ids.append(task)
+    task_name = task_cfg[task]["name"]
+    batch_size = args.batch_size
+    if args.local_rank != -1:
+        batch_size = int(batch_size / dist.get_world_size())
+
+    num_workers = int(args.num_workers / len(ids))
+    logger.info(
+        "Loading %s Dataset with batch size %d"
+        % (task_cfg[task]["name"], batch_size)
+    )
+
+    if args.split:
+        eval_split = args.split
+    else:
+        eval_split = task_cfg[task]["val_split"]
+
+    task_datasets_val[task] = DatasetMapEval[task_name](
+        task=task_cfg[task]["name"],
+        dataroot=task_cfg[task]["dataroot"],
+        annotations_jsonpath=task_cfg[task]["val_annotations_jsonpath"],
+        split=eval_split,
+        image_features_reader=task_feature_reader1[
+            task_cfg[task]["features_h5path1"]
+        ],
+        gt_image_features_reader=task_feature_reader2[
+            task_cfg[task]["features_h5path2"]
+        ],
+        tokenizer=tokenizer,
+        bert_model=args.bert_model,
+        clean_datasets=args.clean_train_sets,
+        padding_index=0,
+        max_seq_length=task_cfg[task]["max_seq_length"],
+        max_region_num=task_cfg[task]["max_region_num"],
+    )
+
+    task_dataloader_val[task] = DataLoader(
+        task_datasets_val[task],
+        shuffle=False,
+        batch_size=batch_size,
+        num_workers=10,
+        pin_memory=True,
+    )
+
+    task_num_iters[task] = len(task_dataloader_val[task])
+    task_batch_size[task] = batch_size
+
+    return (
+        task_batch_size,
+        task_num_iters,
+        task_ids,
+        task_datasets_val,
+        task_dataloader_val,
+    )
 
 if __name__ == '__main__':
 
