@@ -205,9 +205,8 @@ def main():
         2: NCE loss.",
     )
     args = parser.parse_args()
-    with open("vilbert_tasks.yml", "r") as f:
+    with open("task_config.yml", "r") as f:
         task_cfg = edict(yaml.safe_load(f))
-    task_cfg = task_cfg["TASK13"]
 
     random.seed(args.seed)
     np.random.seed(args.seed)
