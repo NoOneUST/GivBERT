@@ -1,8 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
-
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
-
 import copy
 import json
 import logging
@@ -26,18 +21,6 @@ BERT_PRETRAINED_MODEL_ARCHIVE_MAP = {
     "bert-large-uncased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-pytorch_model.bin",
     "bert-base-cased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-pytorch_model.bin",
     "bert-large-cased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased-pytorch_model.bin",
-    "bert-base-multilingual-uncased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-uncased-pytorch_model.bin",
-    "bert-base-multilingual-cased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-cased-pytorch_model.bin",
-    "bert-base-chinese": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-chinese-pytorch_model.bin",
-    "bert-base-german-cased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-german-cased-pytorch_model.bin",
-    "bert-large-uncased-whole-word-masking": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-whole-word-masking-pytorch_model.bin",
-    "bert-large-cased-whole-word-masking": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased-whole-word-masking-pytorch_model.bin",
-    "bert-large-uncased-whole-word-masking-finetuned-squad": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-whole-word-masking-finetuned-squad-pytorch_model.bin",
-    "bert-large-cased-whole-word-masking-finetuned-squad": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased-whole-word-masking-finetuned-squad-pytorch_model.bin",
-    "bert-base-cased-finetuned-mrpc": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-finetuned-mrpc-pytorch_model.bin",
-    "roberta-base": "https://s3.amazonaws.com/models.huggingface.co/bert/roberta-base-pytorch_model.bin",
-    "roberta-large": "https://s3.amazonaws.com/models.huggingface.co/bert/roberta-large-pytorch_model.bin",
-    "roberta-large-mnli": "https://s3.amazonaws.com/models.huggingface.co/bert/roberta-large-mnli-pytorch_model.bin",
 }
 
 
@@ -181,7 +164,6 @@ class BertConfig(object):
     ):
 
         """Constructs BertConfig.
-
         Args:
             vocab_size_or_config_json_file: Vocabulary size of `inputs_ids` in `BertModel`.
             hidden_size: Size of the encoder layers and the pooler layer.
@@ -209,174 +191,7 @@ class BertConfig(object):
         assert max(t_biattention_id) < num_hidden_layers
 
         if isinstance(vocab_size_or_config_json_file, str) or (
-            sys.version_info[0] == 2def ForwardModelsTrain(
-    args,
-    task_cfg,
-    device,
-    task_id,
-    task_count,
-    task_iter_train,
-    task_dataloader_train,
-    model,
-    task_losses,
-):
-    # given the current task, decided whether to forward the model and forward with specific loss.
-
-    # reset the task iteration when needed.
-    if task_count[task_id] % len(task_dataloader_train[task_id]) == 0:
-        task_iter_train[task_id] = iter(task_dataloader_train[task_id])
-
-    task_count[task_id] += 1
-    # get the batch
-    batch = task_iter_train[task_id].next()
-    batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch)
-
-    if task_id == "TASK4" or task_id == "TASK17":
-        features, spatials, image_mask, question, target, input_mask, segment_ids, multiple_choice_ids, co_attention_mask, question_id = (
-            batch
-        )
-    else:
-        features, spatials, image_mask, question, target, input_mask, segment_ids, co_attention_mask, question_id = (
-            batch
-        )
-
-    batch_size = features.size(0)
-    if task_cfg[task_id]["process"] in ["dialog"]:
-        max_num_bbox = features.size(1)
-        nround = question.size(1)
-        num_options = question.size(2)
-        rbatch_size = batch_size * nround
-        question = question.view(rbatch_size, question.size(2), question.size(3))
-        target = target.view(-1)
-        input_mask = input_mask.view(
-            rbatch_size, input_mask.size(2), input_mask.size(3)
-        )
-        segment_ids = segment_ids.view(
-            rbatch_size, segment_ids.size(2), segment_ids.size(3)
-        )
-        co_attention_mask = co_attention_mask.view(
-            rbatch_size,
-            co_attention_mask.size(2),
-            co_attention_mask.size(3),
-            co_attention_mask.size(4),
-        )
-
-        features = (
-            features.unsqueeze(1)
-            .unsqueeze(1)
-            .expand(batch_size, nround, num_options, max_num_bbox, 2048)
-            .contiguous()
-            .view(-1, max_num_bbox, 2048)
-        )
-        spatials = (
-            spatials.unsqueeze(1)
-            .unsqueeze(1)
-            .expand(batch_size, nround, num_options, max_num_bbox, 5)
-            .contiguous()
-            .view(-1, max_num_bbox, 5)
-        )
-        image_mask = (
-            image_mask.unsqueeze(1)
-            .expand(batch_size, nround, num_options, max_num_bbox)
-            .contiguous()
-            .view(-1, max_num_bbox)
-        )
-
-        question = question.view(-1, question.size(2))
-        input_mask = input_mask.view(-1, input_mask.size(2))
-        segment_ids = segment_ids.view(-1, segment_ids.size(2))
-        co_attention_mask = co_attention_mask.view(
-            -1, co_attention_mask.size(2), co_attention_mask.size(3)
-        )
-        batch_size = rbatch_size
-
-    elif task_cfg[task_id]["process"] in ["expand"]:
-        max_num_bbox = features.size(1)
-        num_options = question.size(1)
-        features = (
-            features.unsqueeze(1)
-            .expand(batch_size, num_options, max_num_bbox, 2048)
-            .contiguous()
-            .view(-1, max_num_bbox, 2048)
-        )
-        spatials = (
-            spatials.unsqueeze(1)
-            .expand(batch_size, num_options, max_num_bbox, 5)
-            .contiguous()
-            .view(-1, max_num_bbox, 5)
-        )
-        image_mask = (
-            image_mask.unsqueeze(1)
-            .expand(batch_size, num_options, max_num_bbox)
-            .contiguous()
-            .view(-1, max_num_bbox)
-        )
-        question = question.view(-1, question.size(2))
-        input_mask = input_mask.view(-1, input_mask.size(2))
-        segment_ids = segment_ids.view(-1, segment_ids.size(2))
-        co_attention_mask = co_attention_mask.view(
-            -1, co_attention_mask.size(2), co_attention_mask.size(3)
-        )
-
-    elif task_cfg[task_id]["process"] in ["retrieval"]:
-        max_num_bbox = features.size(1)
-        num_options = question.size(1)
-        features = features.view(-1, features.size(2), features.size(3))
-        spatials = spatials.view(-1, spatials.size(2), spatials.size(3))
-        image_mask = image_mask.view(-1, image_mask.size(2))
-        question = question.view(-1, question.size(2))
-        input_mask = input_mask.view(-1, input_mask.size(2))
-        segment_ids = segment_ids.view(-1, segment_ids.size(2))
-        co_attention_mask = co_attention_mask.view(
-            -1, co_attention_mask.size(2), co_attention_mask.size(3)
-        )
-
-    elif task_cfg[task_id]["process"] in ["nlvr"]:
-        batch_size = features.size(0)
-        max_num_bbox = features.size(1)
-        num_options = question.size(1)
-        features = features.view(
-            batch_size * 2, int(features.size(1) / 2), features.size(2)
-        )
-        spatials = spatials.view(
-            batch_size * 2, int(spatials.size(1) / 2), spatials.size(2)
-        )
-        image_mask = image_mask.view(batch_size * 2, int(image_mask.size(1) / 2))
-        question = question.repeat(1, 2)
-        question = question.view(batch_size * 2, int(question.size(1) / 2))
-        input_mask = input_mask.repeat(1, 2)
-        input_mask = input_mask.view(batch_size * 2, int(input_mask.size(1) / 2))
-        segment_ids = segment_ids.repeat(1, 2)
-        segment_ids = segment_ids.view(batch_size * 2, int(segment_ids.size(1) / 2))
-        co_attention_mask = co_attention_mask.view(
-            batch_size * 2,
-            int(co_attention_mask.size(1) / 2),
-            co_attention_mask.size(2),
-        )
-
-    task_tokens = question.new().resize_(question.size(0), 1).fill_(int(task_id[4:]))
-    vil_prediction, vil_prediction_gqa, vil_logit, vil_binary_prediction, vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
-        question,
-        features,
-        spatials,
-        segment_ids,
-        input_mask,
-        image_mask,
-        co_attention_mask,
-        task_tokens,
-    )
-
-    # for different task, we use different output to calculate the loss.
-    if task_cfg[task_id]["type"] == "VL-tri-classifier":
-        loss = task_losses[task_id](vil_tri_prediction, target)
-        loss = loss.mean()
-        batch_score = compute_score_with_logits(
-            vil_tri_prediction, target
-        ).sum() / float(batch_size)
-    else:
-        raise ValueError("Invalid task type ... ")
-
-    return loss, batch_score
+            sys.version_info[0] == 2
             and isinstance(vocab_size_or_config_json_file, unicode)
         ):
             with open(vocab_size_or_config_json_file, "r", encoding="utf-8") as reader:
@@ -528,32 +343,6 @@ class BertEmbeddings(nn.Module):
         embeddings = self.dropout(embeddings)
 
         return embeddings
-
-
-class RobertaEmbeddings(BertEmbeddings):
-    """
-    Same as BertEmbeddings with a tiny tweak for positional embeddings indexing.
-    """
-
-    def __init__(self, config):
-        super(RobertaEmbeddings, self).__init__(config)
-        self.padding_idx = 1
-
-    def forward(self, input_ids, token_type_ids=None, position_ids=None):
-        seq_length = input_ids.size(1)
-        if position_ids is None:
-            # Position numbers begin at padding_idx+1. Padding symbols are ignored.
-            # cf. fairseq's `utils.make_positions`
-            position_ids = torch.arange(
-                self.padding_idx + 1,
-                seq_length + self.padding_idx + 1,
-                dtype=torch.long,
-                device=input_ids.device,
-            )
-            position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
-        return super(RobertaEmbeddings, self).forward(
-            input_ids, token_type_ids=token_type_ids, position_ids=position_ids
-        )
 
 
 class BertSelfAttention(nn.Module):
@@ -1338,45 +1127,45 @@ class BertImgPredictionHeadTransform(nn.Module):
         return hidden_states
 
 
-class BertLMPredictionHead(nn.Module):
-    def __init__(self, config, bert_model_embedding_weights):
-        super(BertLMPredictionHead, self).__init__()
-        self.transform = BertPredictionHeadTransform(config)
+# class BertLMPredictionHead(nn.Module):
+#     def __init__(self, config, bert_model_embedding_weights):
+#         super(BertLMPredictionHead, self).__init__()
+#         self.transform = BertPredictionHeadTransform(config)
 
-        # The output weights are the same as the input embeddings, but there is
-        # an output-only bias for each token.
-        self.decoder = nn.Linear(
-            bert_model_embedding_weights.size(1),
-            bert_model_embedding_weights.size(0),
-            bias=False,
-        )
-        self.decoder.weight = bert_model_embedding_weights
-        self.bias = nn.Parameter(torch.zeros(bert_model_embedding_weights.size(0)))
+#         # The output weights are the same as the input embeddings, but there is
+#         # an output-only bias for each token.
+#         self.decoder = nn.Linear(
+#             bert_model_embedding_weights.size(1),
+#             bert_model_embedding_weights.size(0),
+#             bias=False,
+#         )
+#         self.decoder.weight = bert_model_embedding_weights
+#         self.bias = nn.Parameter(torch.zeros(bert_model_embedding_weights.size(0)))
 
-    def forward(self, hidden_states):
-        hidden_states = self.transform(hidden_states)
-        hidden_states = self.decoder(hidden_states) + self.bias
-        return hidden_states
-
-
-class BertOnlyMLMHead(nn.Module):
-    def __init__(self, config, bert_model_embedding_weights):
-        super(BertOnlyMLMHead, self).__init__()
-        self.predictions = BertLMPredictionHead(config, bert_model_embedding_weights)
-
-    def forward(self, sequence_output):
-        prediction_scores = self.predictions(sequence_output)
-        return prediction_scores
+#     def forward(self, hidden_states):
+#         hidden_states = self.transform(hidden_states)
+#         hidden_states = self.decoder(hidden_states) + self.bias
+#         return hidden_states
 
 
-class BertOnlyNSPHead(nn.Module):
-    def __init__(self, config):
-        super(BertOnlyNSPHead, self).__init__()
-        self.seq_relationship = nn.Linear(config.hidden_size, 2)
+# class BertOnlyMLMHead(nn.Module):
+#     def __init__(self, config, bert_model_embedding_weights):
+#         super(BertOnlyMLMHead, self).__init__()
+#         self.predictions = BertLMPredictionHead(config, bert_model_embedding_weights)
 
-    def forward(self, pooled_output):
-        seq_relationship_score = self.seq_relationship(pooled_output)
-        return seq_relationship_score
+#     def forward(self, sequence_output):
+#         prediction_scores = self.predictions(sequence_output)
+#         return prediction_scores
+
+
+# class BertOnlyNSPHead(nn.Module):
+#     def __init__(self, config):
+#         super(BertOnlyNSPHead, self).__init__()
+#         self.seq_relationship = nn.Linear(config.hidden_size, 2)
+
+#     def forward(self, pooled_output):
+#         seq_relationship_score = self.seq_relationship(pooled_output)
+#         return seq_relationship_score
 
 
 class BertPreTrainingHeads(nn.Module):
@@ -1455,8 +1244,6 @@ class BertModel(BertPreTrainedModel):
         # initilize word embedding
         if config.model == "bert":
             self.embeddings = BertEmbeddings(config)
-        elif config.model == "roberta":
-            self.embeddings = RobertaEmbeddings(config)
 
         self.task_specific_tokens = config.task_specific_tokens
 
@@ -1593,171 +1380,6 @@ class BertImageEmbeddings(nn.Module):
         embeddings = self.dropout(embeddings)
 
         return embeddings
-
-
-class BertForMultiModalPreTraining(BertPreTrainedModel):
-    """BERT model with multi modal pre-training heads.
-    """
-
-    def __init__(self, config):
-        super(BertForMultiModalPreTraining, self).__init__(config)
-
-        self.bert = BertModel(config)
-        self.cls = BertPreTrainingHeads(
-            config, self.bert.embeddings.word_embeddings.weight
-        )
-
-        self.apply(self.init_weights)
-        self.visual_target = config.visual_target
-        self.num_negative = config.num_negative
-        self.loss_fct = CrossEntropyLoss(ignore_index=-1)
-
-        print("model's visual target is ", config.visual_target)
-
-        if self.visual_target == 0:
-            self.vis_criterion = nn.KLDivLoss(reduction="none")
-        elif self.visual_target == 1:
-            self.vis_criterion = nn.MSELoss(reduction="none")
-        elif self.visual_target == 2:
-            self.vis_criterion = CrossEntropyLoss()
-
-        self.tie_weights()
-
-    def tie_weights(self):
-        """ Make sure we are sharing the input and output embeddings.
-            Export to TorchScript can't handle parameter sharing so we are cloning them instead.
-        """
-        self._tie_or_clone_weights(
-            self.cls.predictions.decoder, self.bert.embeddings.word_embeddings
-        )
-
-    def forward(
-        self,
-        input_ids,
-        image_feat,
-        image_loc,
-        token_type_ids=None,
-        attention_mask=None,
-        image_attention_mask=None,
-        masked_lm_labels=None,
-        image_label=None,
-        image_target=None,
-        next_sentence_label=None,
-        output_all_attention_masks=False,
-    ):
-        # in this model, we first embed the images.
-        sequence_output_t, sequence_output_v, pooled_output_t, pooled_output_v, all_attention_mask = self.bert(
-            input_ids,
-            image_feat,
-            image_loc,
-            token_type_ids,
-            attention_mask,
-            image_attention_mask,
-            output_all_encoded_layers=False,
-            output_all_attention_masks=output_all_attention_masks,
-        )
-
-        prediction_scores_t, prediction_scores_v, seq_relationship_score = self.cls(
-            sequence_output_t, sequence_output_v, pooled_output_t, pooled_output_v
-        )
-
-        if (
-            masked_lm_labels is not None
-            and next_sentence_label is not None
-            and image_target is not None
-        ):
-            prediction_scores_v = prediction_scores_v[:, 1:]
-            if self.visual_target == 1:
-                img_loss = self.vis_criterion(prediction_scores_v, image_target)
-                masked_img_loss = torch.sum(
-                    img_loss * (image_label == 1).unsqueeze(2).float()
-                ) / max(
-                    torch.sum((image_label == 1).unsqueeze(2).expand_as(img_loss)), 1
-                )
-
-            elif self.visual_target == 0:
-                img_loss = self.vis_criterion(
-                    F.log_softmax(prediction_scores_v, dim=2), image_target
-                )
-
-                masked_img_loss = torch.sum(
-                    img_loss * (image_label == 1).unsqueeze(2).float()
-                ) / max(torch.sum((image_label == 1)), 0)
-            elif self.visual_target == 2:
-                # generate negative sampled index.
-                num_negative = self.num_negative
-                num_across_batch = int(self.num_negative * 0.7)
-                num_inside_batch = int(self.num_negative * 0.3)
-
-                batch_size, num_regions, _ = prediction_scores_v.size()
-                assert batch_size != 0
-                # random negative across batches.
-                row_across_index = input_ids.new(
-                    batch_size, num_regions, num_across_batch
-                ).random_(0, batch_size - 1)
-                col_across_index = input_ids.new(
-                    batch_size, num_regions, num_across_batch
-                ).random_(0, num_regions)
-
-                for i in range(batch_size - 1):
-                    row_across_index[i][row_across_index[i] == i] = batch_size - 1
-                final_across_index = row_across_index * num_regions + col_across_index
-
-                # random negative inside batches.
-                row_inside_index = input_ids.new(
-                    batch_size, num_regions, num_inside_batch
-                ).zero_()
-                col_inside_index = input_ids.new(
-                    batch_size, num_regions, num_inside_batch
-                ).random_(0, num_regions - 1)
-
-                for i in range(batch_size):
-                    row_inside_index[i] = i
-                for i in range(num_regions - 1):
-                    col_inside_index[:, i, :][col_inside_index[:, i, :] == i] = (
-                        num_regions - 1
-                    )
-                final_inside_index = row_inside_index * num_regions + col_inside_index
-
-                final_index = torch.cat((final_across_index, final_inside_index), dim=2)
-
-                # Let's first sample where we need to compute.
-                predict_v = prediction_scores_v[image_label == 1]
-                neg_index_v = final_index[image_label == 1]
-
-                flat_image_target = image_target.view(batch_size * num_regions, -1)
-                # we also need to append the target feature at the begining.
-                negative_v = flat_image_target[neg_index_v]
-                positive_v = image_target[image_label == 1]
-                sample_v = torch.cat((positive_v.unsqueeze(1), negative_v), dim=1)
-
-                # calculate the loss.
-                score = torch.bmm(sample_v, predict_v.unsqueeze(2)).squeeze(2)
-                masked_img_loss = self.vis_criterion(
-                    score, input_ids.new(score.size(0)).zero_()
-                )
-
-            # masked_img_loss = torch.sum(img_loss) / (img_loss.shape[0] * img_loss.shape[1])
-            masked_lm_loss = self.loss_fct(
-                prediction_scores_t.view(-1, self.config.vocab_size),
-                masked_lm_labels.view(-1),
-            )
-
-            next_sentence_loss = self.loss_fct(
-                seq_relationship_score.view(-1, 2), next_sentence_label.view(-1)
-            )
-            return (
-                masked_lm_loss.unsqueeze(0),
-                masked_img_loss.unsqueeze(0),
-                next_sentence_loss.unsqueeze(0),
-            )
-        else:
-            return (
-                prediction_scores_t,
-                prediction_scores_v,
-                seq_relationship_score,
-                all_attention_mask,
-            )
 
 
 class VILBertForVLTasks(BertPreTrainedModel):
