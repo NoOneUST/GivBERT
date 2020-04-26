@@ -1,5 +1,5 @@
 # COMP5212 Visual Emtailment
-Part of the code is modified from Github repo [vilbert-multi-task](https://github.com/facebookresearch/vilbert-multi-task)
+Part of the code is modified from Github repo [vilbert-multi-task](https://github.com/facebookresearch/vilbert-multi-task).
 ## Setup
 1. Download the repository from Github
 ```
@@ -27,3 +27,8 @@ To get move on, you need to download the pre-trained VilBERT models for [12-in-1
 [Download link](https://dl.fbaipublicfiles.com/vilbert-multi-task/pretrained_model.bin)
 ### VilBERT-MT 
 [Download link](https://dl.fbaipublicfiles.com/vilbert-multi-task/multi_task_model.bin)
+
+## Command lines for experiments
+```
+python main.py --bert_model bert-base-uncased --from_pretrained model/<model_name> --config_file config/bert_base_6layer_6conect.json --lr_scheduler 'warmup_linear' --train_iter_gap 4 --task_specific_tokens --save_name <finetune_from_multi_task_model>
+```
