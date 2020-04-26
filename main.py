@@ -1,8 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
-
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
-
 import argparse
 import json
 import logging
@@ -23,7 +18,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 
-from pytorch_transformers.optimization import (
+from "TASK13".optimization import (
     AdamW,
     WarmupConstantSchedule,
     WarmupLinearSchedule,
@@ -212,6 +207,7 @@ def main():
     args = parser.parse_args()
     with open("vilbert_tasks.yml", "r") as f:
         task_cfg = edict(yaml.safe_load(f))
+    task_cfg = task_cfg["TASK13"]
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -224,26 +220,18 @@ def main():
         from vilbert.vilbert import BertConfig
         from vilbert.vilbert import VILBertForVLTasks
 
-    task_names = []
-    task_lr = []
-    task = "TASK13"
-    name = task_cfg[task]["name"]
-    task_names.append(name)
-    task_lr.append(task_cfg[task]["lr"])
+    name = task_cfg["name"]
+    task_lr = task_cfg["lr"]
 
-    base_lr = min(task_lr)
-    loss_scale = {}
-    task = "TASK13"
-    loss_scale[task] = task_lr[i] / base_lr
+    base_lr = task_lr
+    loss_scale = task_lr / base_lr
 
     if args.save_name:
         prefix = "-" + args.save_name
     else:
         prefix = ""
     timeStamp = (
-        "-".join(task_names)
-        + "_"
-        + args.config_file.split("/")[1].split(".")[0]
+        args.config_file.split("/")[1].split(".")[0]
         + prefix
     )
     savePath = os.path.join(args.output_dir, timeStamp)
@@ -289,16 +277,15 @@ def main():
             print("\n", file=f)
             print(config, file=f)
 
-    task_batch_size, task_num_iters, task_ids, task_datasets_train, task_datasets_val, task_dataloader_train, task_dataloader_val = LoadDatasets(
-        args, task_cfg, [13]
+    # load dataset
+    task_batch_size, task_num_iters, task_datasets_train, task_datasets_val, task_dataloader_train, task_dataloader_val = LoadDatasets(
+        args, task_cfg
     )
 
     logdir = os.path.join(savePath, "logs")
     tbLogger = utils.tbLogger(
         logdir,
         savePath,
-        task_names,
-        task_ids,
         task_num_iters,
         args.gradient_accumulation_steps,
     )
@@ -315,49 +302,38 @@ def main():
 
     task_ave_iter = {}
     task_stop_controller = {}
-    for task_id, num_iter in task_num_iters.items():
-        task_ave_iter[task_id] = int(
-            task_cfg[task]["num_epoch"]
-            * num_iter
-            * args.train_iter_multiplier
-            / args.num_train_epochs
-        )
-        task_stop_controller[task_id] = utils.MultiTaskStopOnPlateau(
-            mode="max",
-            patience=1,
-            continue_threshold=0.005,
-            cooldown=1,
-            threshold=0.001,
-        )
+    task_ave_iter = int(
+        task_cfg["num_epoch"]
+        * task_num_iters
+        * args.train_iter_multiplier
+        / args.num_train_epochs
+    )
+    task_stop_controller = utils.TaskStopOnPlateau(
+        mode="max",
+        patience=1,
+        continue_threshold=0.005,
+        cooldown=1,
+        threshold=0.001,
+    )
 
     task_ave_iter_list = sorted(task_ave_iter.values())
     median_num_iter = task_ave_iter_list[-1]
     num_train_optimization_steps = (
         median_num_iter * args.num_train_epochs // args.gradient_accumulation_steps
     )
-    num_labels = max([dataset.num_labels for dataset in task_datasets_train.values()])
+    num_labels = task_datasets_train.num_labels
 
     if args.dynamic_attention:
         config.dynamic_attention = True
-    if "roberta" in args.bert_model:
-        config.model = "roberta"
 
-    if args.baseline:
-        model = BaseBertForVLTasks.from_pretrained(
-            args.from_pretrained,
-            config=config,
-            num_labels=num_labels,
-            default_gpu=default_gpu,
-        )
-    else:
-        model = VILBertForVLTasks.from_pretrained(
-            args.from_pretrained,
-            config=config,
-            num_labels=num_labels,
-            default_gpu=default_gpu,
-        )
+    model = VILBertForVLTasks.from_pretrained(
+        args.from_pretrained,
+        config=config,
+        num_labels=num_labels,
+        default_gpu=default_gpu,
+    )
 
-    task_losses = LoadLosses(args, task_cfg, ["13"])
+    task_losses = LoadLosses(args, task_cfg)
 
     no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
 
@@ -405,11 +381,13 @@ def main():
     if default_gpu:
         print(len(list(model.named_parameters())), len(optimizer_grouped_parameters))
 
+    # choose optimizer
     if args.optim == "AdamW":
         optimizer = AdamW(optimizer_grouped_parameters, lr=base_lr, correct_bias=False)
     elif args.optim == "RAdam":
         optimizer = RAdam(optimizer_grouped_parameters, lr=base_lr)
 
+    # choose scheduler
     warmpu_steps = args.warmup_proportion * num_train_optimization_steps
 
     if args.lr_scheduler == "warmup_linear":
@@ -488,69 +466,67 @@ def main():
         print("  Batch size: ", task_batch_size)
         print("  Num steps: %d" % num_train_optimization_steps)
 
-    task_iter_train = {name: None for name in task_ids}
-    task_count = {name: 0 for name in task_ids}
+    task_iter_train = None
+    task_count = 0
     for epochId in tqdm(range(start_epoch, args.num_train_epochs), desc="Epoch"):
         model.train()
         for step in range(median_num_iter):
             iterId = startIterID + step + (epochId * median_num_iter)
             first_task = True
-            for task_id in task_ids:
-                is_forward = False
-                if (not task_stop_controller[task_id].in_stop) or (
-                    iterId % args.train_iter_gap == 0
-                ):
-                    is_forward = True
 
-                if is_forward:
-                    loss, score = ForwardModelsTrain(
-                        args,
-                        task_cfg,
-                        device,
-                        task_id,
-                        task_count,
-                        task_iter_train,
-                        task_dataloader_train,
-                        model,
-                        task_losses,
-                    )
+            is_forward = False
+            if (not task_stop_controller.in_stop) or (
+                iterId % args.train_iter_gap == 0
+            ):
+                is_forward = True
 
-                    loss = loss * loss_scale[task_id]
-                    if args.gradient_accumulation_steps > 1:
-                        loss = loss / args.gradient_accumulation_steps
+            if is_forward:
+                loss, score = ForwardModelsTrain(
+                    args,
+                    task_cfg,
+                    device,
+                    task_count,
+                    task_iter_train,
+                    task_dataloader_train,
+                    model,
+                    task_losses,
+                )
 
-                    loss.backward()
-                    if (step + 1) % args.gradient_accumulation_steps == 0:
-                        if args.fp16:
-                            lr_this_step = args.learning_rate * warmup_linear(
-                                global_step / num_train_optimization_steps,
-                                args.warmup_proportion,
-                            )
-                            for param_group in optimizer.param_groups:
-                                param_group["lr"] = lr_this_step
+                loss = loss * loss_scale
+                if args.gradient_accumulation_steps > 1:
+                    loss = loss / args.gradient_accumulation_steps
 
-                        if first_task and (
-                            global_step < warmpu_steps
-                            or args.lr_scheduler == "warmup_linear"
-                        ):
-                            warmup_scheduler.step()
+                loss.backward()
+                if (step + 1) % args.gradient_accumulation_steps == 0:
+                    if args.fp16:
+                        lr_this_step = args.learning_rate * warmup_linear(
+                            global_step / num_train_optimization_steps,
+                            args.warmup_proportion,
+                        )
+                        for param_group in optimizer.param_groups:
+                            param_group["lr"] = lr_this_step
 
-                        optimizer.step()
-                        model.zero_grad()
-                        if first_task:
-                            global_step += 1
-                            first_task = False
+                    if first_task and (
+                        global_step < warmpu_steps
+                        or args.lr_scheduler == "warmup_linear"
+                    ):
+                        warmup_scheduler.step()
 
-                        if default_gpu:
-                            tbLogger.step_train(
-                                epochId,
-                                iterId,
-                                float(loss),
-                                float(score),
-                                optimizer.param_groups[0]["lr"],
-                                task_id,
-                                "train",
-                            )
+                    optimizer.step()
+                    model.zero_grad()
+                    if first_task:
+                        global_step += 1
+                        first_task = False
+
+                    if default_gpu:
+                        tbLogger.step_train(
+                            epochId,
+                            iterId,
+                            float(loss),
+                            float(score),
+                            optimizer.param_groups[0]["lr"],
+                            "train",
+                        )
 
             if "cosine" in args.lr_scheduler and global_step > warmpu_steps:
                 lr_scheduler.step()
@@ -562,24 +538,22 @@ def main():
             ):
                 tbLogger.showLossTrain()
 
-            # decided whether to evaluate on each tasks.
-            for task_id in task_ids:
-                if (iterId != 0 and iterId % task_num_iters[task_id] == 0) or (
-                    epochId == args.num_train_epochs - 1 and step == median_num_iter - 1
-                ):
-                    evaluate(
-                        args,
-                        task_dataloader_val,
-                        task_stop_controller,
-                        task_cfg,
-                        device,
-                        task_id,
-                        model,
-                        task_losses,
-                        epochId,
-                        default_gpu,
-                        tbLogger,
-                    )
+            # decided whether to evaluate on SNLI tasks.
+            if (iterId != 0 and iterId % task_num_iters == 0) or (
+                epochId == args.num_train_epochs - 1 and step == median_num_iter - 1
+            ):
+                evaluate(
+                    args,
+                    task_dataloader_val,
+                    task_stop_controller,
+                    task_cfg,
+                    device,
+                    model,
+                    task_losses,
+                    epochId,
+                    default_gpu,
+                    tbLogger,
+                )
 
         if args.lr_scheduler == "automatic":
             lr_scheduler.step(sum(val_scores.values()))
@@ -588,9 +562,8 @@ def main():
             lr_scheduler.step()
 
         if epochId in lr_reduce_list:
-            for task_id in task_ids:
-                # reset the task_stop_controller once the lr drop
-                task_stop_controller[task_id]._reset()
+            # reset the task_stop_controller once the lr drop
+            task_stop_controller._reset()
 
         if default_gpu:
             # Save a trained model
@@ -625,7 +598,6 @@ def evaluate(
     task_stop_controller,
     task_cfg,
     device,
-    task_id,
     model,
     task_losses,
     epochId,
@@ -634,20 +606,20 @@ def evaluate(
 ):
 
     model.eval()
-    for i, batch in enumerate(task_dataloader_val[task_id]):
+    for i, batch in enumerate(task_dataloader_val):
         loss, score, batch_size = ForwardModelsVal(
-            args, task_cfg, device, task_id, batch, model, task_losses
+            args, task_cfg, device, batch, model, task_losses
         )
         tbLogger.step_val(
-            epochId, float(loss), float(score), task_id, batch_size, "val"
+            epochId, float(loss), float(score), batch_size, "val"
         )
         if default_gpu:
-            sys.stdout.write("%d/%d\r" % (i, len(task_dataloader_val[task_id])))
+            sys.stdout.write("%d/%d\r" % (i, len(task_dataloader_val)))
             sys.stdout.flush()
 
     # update the multi-task scheduler.
-    task_stop_controller[task_id].step(tbLogger.getValScore(task_id))
-    score = tbLogger.showLossVal(task_id, task_stop_controller)
+    task_stop_controllerstep(tbLogger.getValScore())
+    score = tbLogger.showLossVal(task_stop_controller)
     model.train()
 
 

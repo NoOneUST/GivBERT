@@ -17,6 +17,10 @@ import pdb
 
 logger = logging.getLogger(__name__)
 
+LossMap = {
+    "BCEWithLogitLoss": nn.BCEWithLogitsLoss(reduction="mean"),
+    "CrossEntropyLoss": nn.CrossEntropyLoss(),
+}
 
 def LoadDatasets(args, task_cfg, split="trainval"):
 
@@ -226,3 +230,75 @@ def LoadDatasetEval(args, task_cfg):
         task_dataset_val,
         task_dataloader_val,
     )
+
+
+def ForwardModelsTrain(
+    args,
+    task_cfg,
+    device,
+    task_count,
+    task_iter_train,
+    task_dataloader_train,
+    model,
+    task_losses,
+):
+    # given the current task, decided whether to forward the model and forward with specific loss.
+
+    # reset the task iteration when needed.
+    if task_count % len(task_dataloader_train) == 0:
+        task_iter_train = iter(task_dataloader_train)
+
+    task_count += 1
+    # get the batch
+    batch = task_iter_train.next()
+    batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch)
+
+    batch_size = features.size(0)
+
+    task_tokens = question.new().resize_(question.size(0), 1).fill_(int(task_id[4:]))
+    vil_prediction, vil_prediction_gqa, vil_logit, vil_binary_prediction, vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
+        question,
+        features,
+        spatials,
+        segment_ids,
+        input_mask,
+        image_mask,
+        co_attention_mask,
+        task_tokens,
+    )
+
+    loss = task_losses(vil_tri_prediction, target)
+    loss = loss.mean()
+    batch_score = compute_score_with_logits(
+        vil_tri_prediction, target
+    ).sum() / float(batch_size)
+
+    return loss, batch_score
+
+def ForwardModelsVal(args, task_cfg, device, batch, model, task_losses):
+    batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch)
+
+    batch_size = features.size(0)
+    task_tokens = question.new().resize_(question.size(0), 1).fill_(int(task_id[4:]))
+
+    vil_prediction, vil_prediction_gqa, vil_logit, vil_binary_prediction, vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
+        question,
+        features,
+        spatials,
+        segment_ids,
+        input_mask,
+        image_mask,
+        co_attention_mask,
+        task_tokens,
+    )
+
+    loss = task_losses(vil_tri_prediction, target)
+    loss = loss.mean()
+    batch_score = compute_score_with_logits(vil_tri_prediction, target).sum()
+
+    return float(loss), float(batch_score), batch_size
+
+
+def LoadLosses(args, task_cfg):
+    losses = LossMap[task_cfg["loss"]]
+    return losses

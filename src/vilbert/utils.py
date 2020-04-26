@@ -148,8 +148,6 @@ class tbLogger(object):
         self,
         log_dir,
         txt_dir,
-        task_names,
-        task_ids,
         task_num_iters,
         gradient_accumulation_steps,
         save_logger=True,
@@ -164,32 +162,28 @@ class tbLogger(object):
             self.logger = SummaryWriter(log_dir=log_dir)
 
         self.txt_f = open(txt_dir + "/" + txt_name, "w")
-        self.task_id2name = {
-            ids: name.replace("+", "plus") for ids, name in zip(task_ids, task_names)
-        }
-        self.task_ids = task_ids
-        self.task_loss = {task_id: 0 for task_id in task_ids}
-        self.task_loss_tmp = {task_id: 0 for task_id in task_ids}
-        self.task_score_tmp = {task_id: 0 for task_id in task_ids}
-        self.task_norm_tmp = {task_id: 0 for task_id in task_ids}
-        self.task_step = {task_id: 0 for task_id in task_ids}
-        self.task_step_tmp = {task_id: 0 for task_id in task_ids}
+        self.task_loss = 0
+        self.task_loss_tmp = 0 
+        self.task_score_tmp = 0
+        self.task_norm_tmp = 0 
+        self.task_step = 0 
+        self.task_step_tmp = 0 
         self.task_num_iters = task_num_iters
         self.epochId = 0
         self.gradient_accumulation_steps = gradient_accumulation_steps
-        self.task_loss_val = {task_id: 0 for task_id in task_ids}
-        self.task_score_val = {task_id: 0 for task_id in task_ids}
-        self.task_step_val = {task_id: 0 for task_id in task_ids}
-        self.task_iter_val = {task_id: 0 for task_id in task_ids}
-        self.task_datasize_val = {task_id: 0 for task_id in task_ids}
+        self.task_loss_val = 0
+        self.task_score_val = 0
+        self.task_step_val = 0
+        self.task_iter_val = 0
+        self.task_datasize_val = 0
 
-        self.masked_t_loss = {task_id: 0 for task_id in task_ids}
-        self.masked_v_loss = {task_id: 0 for task_id in task_ids}
-        self.next_sentense_loss = {task_id: 0 for task_id in task_ids}
+        self.masked_t_loss = 0
+        self.masked_v_loss = 0
+        self.next_sentense_loss = 0
 
-        self.masked_t_loss_val = {task_id: 0 for task_id in task_ids}
-        self.masked_v_loss_val = {task_id: 0 for task_id in task_ids}
-        self.next_sentense_loss_val = {task_id: 0 for task_id in task_ids}
+        self.masked_t_loss_val = 
+        self.masked_v_loss_val = 0
+        self.next_sentense_loss_val = 0
 
     def __getstate__(self):
         d = dict(self.__dict__)
@@ -211,152 +205,95 @@ class tbLogger(object):
         if self.save_logger:
             self.logger.add_scalar(split + "/" + key, val, step)
 
-    def step_train(self, epochId, stepId, loss, score, norm, task_id, split):
+    def step_train(self, epochId, stepId, loss, score, norm, split):
 
-        self.task_loss[task_id] += loss
-        self.task_loss_tmp[task_id] += loss
-        self.task_score_tmp[task_id] += score
-        self.task_norm_tmp[task_id] += norm
-        self.task_step[task_id] += self.gradient_accumulation_steps
-        self.task_step_tmp[task_id] += self.gradient_accumulation_steps
+        self.task_loss += loss
+        self.task_loss_tmp += loss
+        self.task_score_tmp += score
+        self.task_norm_tmp += norm
+        self.task_step += self.gradient_accumulation_steps
+        self.task_step_tmp += self.gradient_accumulation_steps
         self.epochId = epochId
 
         # plot on tensorboard.
-        self.linePlot(stepId, loss, split, self.task_id2name[task_id] + "_loss")
-        self.linePlot(stepId, score, split, self.task_id2name[task_id] + "_score")
-        self.linePlot(stepId, norm, split, self.task_id2name[task_id] + "_norm")
+        self.linePlot(stepId, loss, split, "loss")
+        self.linePlot(stepId, score, split, "score")
+        self.linePlot(stepId, norm, split, "norm")
 
-    def step_train_CC(
-        self,
-        epochId,
-        stepId,
-        masked_loss_t,
-        masked_loss_v,
-        next_sentence_loss,
-        norm,
-        task_id,
-        split,
-    ):
+    def step_val(self, epochId, loss, score, batch_size, split):
+        self.task_loss_val += loss * batch_size
+        self.task_score_val += score
+        self.task_step_val += self.gradient_accumulation_steps
+        self.task_datasize_val += batch_size
 
-        self.masked_t_loss[task_id] += masked_loss_t
-        self.masked_v_loss[task_id] += masked_loss_v
-        self.next_sentense_loss[task_id] += next_sentence_loss
-        self.task_norm_tmp[task_id] += norm
-
-        self.task_step[task_id] += self.gradient_accumulation_steps
-        self.task_step_tmp[task_id] += self.gradient_accumulation_steps
-        self.epochId = epochId
-
-        # plot on tensorboard.
-        self.linePlot(
-            stepId, masked_loss_t, split, self.task_id2name[task_id] + "_masked_loss_t"
-        )
-        self.linePlot(
-            stepId, masked_loss_v, split, self.task_id2name[task_id] + "_masked_loss_v"
-        )
-        self.linePlot(
-            stepId,
-            next_sentence_loss,
-            split,
-            self.task_id2name[task_id] + "_next_sentence_loss",
-        )
-
-    def step_val(self, epochId, loss, score, task_id, batch_size, split):
-        self.task_loss_val[task_id] += loss * batch_size
-        self.task_score_val[task_id] += score
-        self.task_step_val[task_id] += self.gradient_accumulation_steps
-        self.task_datasize_val[task_id] += batch_size
-
-    def step_val_CC(
-        self,
-        epochId,
-        masked_loss_t,
-        masked_loss_v,
-        next_sentence_loss,
-        task_id,
-        batch_size,
-        split,
-    ):
-
-        self.masked_t_loss_val[task_id] += masked_loss_t
-        self.masked_v_loss_val[task_id] += masked_loss_v
-        self.next_sentense_loss_val[task_id] += next_sentence_loss
-
-        self.task_step_val[task_id] += self.gradient_accumulation_steps
-        self.task_datasize_val[task_id] += batch_size
 
     def showLossValAll(self):
         progressInfo = "Eval Ep: %d " % self.epochId
         lossInfo = "Validation "
         val_scores = {}
         ave_loss = 0
-        for task_id in self.task_ids:
-            loss = self.task_loss_val[task_id] / float(self.task_step_val[task_id])
-            score = self.task_score_val[task_id] / float(
-                self.task_datasize_val[task_id]
-            )
-            val_scores[task_id] = score
-            ave_loss += loss
-            lossInfo += "[%s]: loss %.3f score %.3f " % (
-                self.task_id2name[task_id],
-                loss,
-                score * 100.0,
-            )
 
-            self.linePlot(
-                self.epochId, loss, "val", self.task_id2name[task_id] + "_loss"
-            )
-            self.linePlot(
-                self.epochId, score, "val", self.task_id2name[task_id] + "_score"
-            )
+        loss = self.task_loss_val / float(self.task_step_val)
+        score = self.task_score_val / float(
+            self.task_datasize_val
+        )
+        val_scores = score
+        ave_loss += loss
+        lossInfo += "loss %.3f score %.3f " % (
+            loss,
+            score * 100.0,
+        )
 
-        self.task_loss_val = {task_id: 0 for task_id in self.task_loss_val}
-        self.task_score_val = {task_id: 0 for task_id in self.task_score_val}
-        self.task_datasize_val = {task_id: 0 for task_id in self.task_datasize_val}
-        self.task_step_val = {task_id: 0 for task_id in self.task_ids}
+        self.linePlot(
+            self.epochId, loss, "val", "loss"
+        )
+        self.linePlot(
+            self.epochId, score, "val", "score"
+        )
+
+        self.task_loss_val = 0
+        self.task_score_val = 0
+        self.task_datasize_val = 0
+        self.task_step_val = 0
 
         logger.info(progressInfo)
         logger.info(lossInfo)
         print(lossInfo, file=self.txt_f)
         return val_scores
 
-    def getValScore(self, task_id):
-        return self.task_score_val[task_id] / float(self.task_datasize_val[task_id])
+    def getValScore(self):
+        return self.task_score_val / float(self.task_datasize_val)
 
-    def showLossVal(self, task_id, task_stop_controller=None):
-        progressInfo = "Eval task %s on iteration %d " % (
-            task_id,
-            self.task_step[task_id],
-        )
+    def showLossVal(self, task_stop_controller=None):
+        progressInfo = "Eval task %s on iteration %d " % (self.task_step)
         lossInfo = "Validation "
         ave_loss = 0
-        loss = self.task_loss_val[task_id] / float(self.task_datasize_val[task_id])
-        score = self.task_score_val[task_id] / float(self.task_datasize_val[task_id])
+        loss = self.task_loss_val / float(self.task_datasize_val)
+        score = self.task_score_val / float(self.task_datasize_val)
         ave_loss += loss
-        lossInfo += "[%s]: loss %.3f score %.3f " % (
-            self.task_id2name[task_id],
+        lossInfo += "loss %.3f score %.3f " % (
             loss,
             score * 100.0,
         )
 
         self.linePlot(
-            self.task_step[task_id], loss, "val", self.task_id2name[task_id] + "_loss"
+            self.task_step, loss, "val", "loss"
         )
         self.linePlot(
-            self.task_step[task_id], score, "val", self.task_id2name[task_id] + "_score"
+            self.task_step, score, "val", "score"
         )
         if task_stop_controller is not None:
             self.linePlot(
-                self.task_step[task_id],
-                task_stop_controller[task_id].in_stop,
+                self.task_step,
+                task_stop_controller.in_stop,
                 "val",
-                self.task_id2name[task_id] + "_early_stop",
+                "early_stop",
             )
 
-        self.task_loss_val[task_id] = 0
-        self.task_score_val[task_id] = 0
-        self.task_datasize_val[task_id] = 0
-        self.task_step_val[task_id] = 0
+        self.task_loss_val = 0
+        self.task_score_val = 0
+        self.task_datasize_val = 0
+        self.task_step_val = 0
         logger.info(progressInfo)
         logger.info(lossInfo)
         print(lossInfo, file=self.txt_f)
@@ -365,113 +302,27 @@ class tbLogger(object):
     def showLossTrain(self):
         # show the current loss, once showed, reset the loss.
         lossInfo = ""
-        for task_id in self.task_ids:
-            if self.task_num_iters[task_id] > 0:
-                if self.task_step_tmp[task_id]:
-                    lossInfo += (
-                        "[%s]: iter %d Ep: %.2f loss %.3f score %.3f lr %.6g "
-                        % (
-                            self.task_id2name[task_id],
-                            self.task_step[task_id],
-                            self.task_step[task_id]
-                            / float(self.task_num_iters[task_id]),
-                            self.task_loss_tmp[task_id]
-                            / float(self.task_step_tmp[task_id]),
-                            self.task_score_tmp[task_id]
-                            / float(self.task_step_tmp[task_id]),
-                            self.task_norm_tmp[task_id]
-                            / float(self.task_step_tmp[task_id]),
-                        )
+        if self.task_num_iters > 0:
+            if self.task_step_tmp:
+                lossInfo += (
+                    "iter %d Ep: %.2f loss %.3f score %.3f lr %.6g "
+                    % (
+                        self.task_step,
+                        self.task_step
+                        / float(self.task_num_iters),
+                        self.task_loss_tmp
+                        / float(self.task_step_tmp),
+                        self.task_score_tmp
+                        / float(self.task_step_tmp),
+                        self.task_norm_tmp
+                        / float(self.task_step_tmp),
                     )
+                )
 
         logger.info(lossInfo)
         print(lossInfo, file=self.txt_f)
 
-        self.task_step_tmp = {task_id: 0 for task_id in self.task_ids}
-        self.task_loss_tmp = {task_id: 0 for task_id in self.task_ids}
-        self.task_score_tmp = {task_id: 0 for task_id in self.task_ids}
-        self.task_norm_tmp = {task_id: 0 for task_id in self.task_ids}
-
-    def showLossValCC(self):
-        progressInfo = "Eval Ep: %d " % self.epochId
-        lossInfo = "Validation "
-        for task_id in self.task_ids:
-            masked_t_loss_val = self.masked_t_loss_val[task_id] / float(
-                self.task_step_val[task_id]
-            )
-            masked_v_loss_val = self.masked_v_loss_val[task_id] / float(
-                self.task_step_val[task_id]
-            )
-            next_sentense_loss_val = self.next_sentense_loss_val[task_id] / float(
-                self.task_step_val[task_id]
-            )
-
-            lossInfo += "[%s]: masked_t %.3f masked_v %.3f NSP %.3f" % (
-                self.task_id2name[task_id],
-                masked_t_loss_val,
-                masked_v_loss_val,
-                next_sentense_loss_val,
-            )
-
-            self.linePlot(
-                self.epochId,
-                masked_t_loss_val,
-                "val",
-                self.task_id2name[task_id] + "_mask_t",
-            )
-            self.linePlot(
-                self.epochId,
-                masked_v_loss_val,
-                "val",
-                self.task_id2name[task_id] + "_maks_v",
-            )
-            self.linePlot(
-                self.epochId,
-                next_sentense_loss_val,
-                "val",
-                self.task_id2name[task_id] + "_nsp",
-            )
-
-        self.masked_t_loss_val = {task_id: 0 for task_id in self.masked_t_loss_val}
-        self.masked_v_loss_val = {task_id: 0 for task_id in self.masked_v_loss_val}
-        self.next_sentense_loss_val = {
-            task_id: 0 for task_id in self.next_sentense_loss_val
-        }
-        self.task_datasize_val = {task_id: 0 for task_id in self.task_datasize_val}
-        self.task_step_val = {task_id: 0 for task_id in self.task_ids}
-
-        logger.info(lossInfo)
-        print(lossInfo, file=self.txt_f)
-
-    def showLossTrainCC(self):
-        # show the current loss, once showed, reset the loss.
-        lossInfo = ""
-        for task_id in self.task_ids:
-            if self.task_num_iters[task_id] > 0:
-                if self.task_step_tmp[task_id]:
-                    lossInfo += (
-                        "[%s]: iter %d Ep: %.2f masked_t %.3f masked_v %.3f NSP %.3f lr %.6g"
-                        % (
-                            self.task_id2name[task_id],
-                            self.task_step[task_id],
-                            self.task_step[task_id]
-                            / float(self.task_num_iters[task_id]),
-                            self.masked_t_loss[task_id]
-                            / float(self.task_step_tmp[task_id]),
-                            self.masked_v_loss[task_id]
-                            / float(self.task_step_tmp[task_id]),
-                            self.next_sentense_loss[task_id]
-                            / float(self.task_step_tmp[task_id]),
-                            self.task_norm_tmp[task_id]
-                            / float(self.task_step_tmp[task_id]),
-                        )
-                    )
-
-        logger.info(lossInfo)
-        print(lossInfo, file=self.txt_f)
-
-        self.task_step_tmp = {task_id: 0 for task_id in self.task_ids}
-        self.masked_t_loss = {task_id: 0 for task_id in self.task_ids}
-        self.masked_v_loss = {task_id: 0 for task_id in self.task_ids}
-        self.next_sentense_loss = {task_id: 0 for task_id in self.task_ids}
-        self.task_norm_tmp = {task_id: 0 for task_id in self.task_ids}
+        self.task_step_tmp = 0
+        self.task_loss_tmp = 0
+        self.task_score_tmp = 0
+        self.task_norm_tmp = 0
