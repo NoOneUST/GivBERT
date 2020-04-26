@@ -1,3 +1,4 @@
+# TAKEN FROM: https://github.com/facebookresearch/vilbert-multi-task
 import math
 import torch
 from torch.optim import Optimizer
