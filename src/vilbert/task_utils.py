@@ -69,10 +69,9 @@ def LoadDatasets(args, task_cfg, split="trainval"):
         % (task_cfg["name"], batch_size)
     )
 
-    task_datasets_train = None
     if "train" in split:
         print("LOAD TRAIN DATASET")
-        task_datasets_train = VisualEntailmentDataset(
+        task_dataset_train = VisualEntailmentDataset(
             task=task_cfg["name"],
             dataroot=task_cfg["dataroot"],
             annotations_jsonpath=task_cfg["train_annotations_jsonpath"],
@@ -90,11 +89,9 @@ def LoadDatasets(args, task_cfg, split="trainval"):
             max_seq_length=task_cfg["max_seq_length"],
             max_region_num=task_cfg["max_region_num"],
         )
-        print(task_datasets_train)
 
-    task_datasets_val = None
     if "val" in split:
-        task_datasets_val = VisualEntailmentDataset(
+        task_dataset_val = VisualEntailmentDataset(
             task=task_cfg["name"],
             dataroot=task_cfg["dataroot"],
             annotations_jsonpath=task_cfg["val_annotations_jsonpath"],
@@ -117,14 +114,14 @@ def LoadDatasets(args, task_cfg, split="trainval"):
     if "train" in split:
         print("LOAD TRAIN DATALOADER")
         if args.local_rank == -1:
-            train_sampler = RandomSampler(task_datasets_train)
+            train_sampler = RandomSampler(task_dataset_train)
         else:
             # TODO: check if this works with current data generator from disk that relies on next(file)
             # (it doesn't return item back by index)
-            train_sampler = DistributedSampler(task_datasets_train)
+            train_sampler = DistributedSampler(task_dataset_train)
 
         task_dataloader_train = DataLoader(
-            task_datasets_train,
+            task_dataset_train,
             sampler=train_sampler,
             batch_size=batch_size,
             num_workers=num_workers,
@@ -136,7 +133,7 @@ def LoadDatasets(args, task_cfg, split="trainval"):
 
     if "val" in split:
         task_dataloader_val = DataLoader(
-            task_datasets_val,
+            task_dataset_val,
             shuffle=False,
             batch_size=batch_size,
             num_workers=2,
