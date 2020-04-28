@@ -182,7 +182,7 @@ class tbLogger(object):
         self.masked_v_loss = 0
         self.next_sentense_loss = 0
 
-        self.masked_t_loss_val = 
+        self.masked_t_loss_val = 0
         self.masked_v_loss_val = 0
         self.next_sentense_loss_val = 0
 

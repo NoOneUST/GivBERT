@@ -30,5 +30,5 @@ To get move on, you need to download the pre-trained VilBERT models for [12-in-1
 
 ## Command lines for experiments
 ```
-python main.py --bert_model bert-base-uncased --from_pretrained model/<model_name> --config_file config/bert_base_6layer_6conect.json --lr_scheduler 'warmup_linear' --train_iter_gap 4 --task_specific_tokens --save_name <finetune_from_multi_task_model>
+python main.py --bert_model bert-base-uncased --from_pretrained model/<model_name> --config_file config/bert_base_6layer_6conect.json --lr_scheduler 'warmup_linear' --train_iter_gap 4 --save_name <finetune_from_multi_task_model>
 ```

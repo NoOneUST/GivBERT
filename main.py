@@ -23,14 +23,6 @@ from pytorch_transformers.optimization import (
     WarmupConstantSchedule,
     WarmupLinearSchedule,
 )
-
-from vilbert.optimization import RAdam
-from vilbert.task_utils import (
-    LoadDatasets,
-    LoadLosses,
-    ForwardModelsTrain,
-    ForwardModelsVal,
-)
 from torch.optim.lr_scheduler import (
     LambdaLR,
     ReduceLROnPlateau,
@@ -38,7 +30,15 @@ from torch.optim.lr_scheduler import (
     CosineAnnealingWarmRestarts,
 )
 
-import vilbert.utils as utils
+from src.vilbert.optimization import RAdam
+from src.vilbert.task_utils import (
+    LoadDatasets,
+    LoadLosses,
+    ForwardModelsTrain,
+    ForwardModelsVal,
+)
+
+import src.vilbert.utils as utils
 import torch.distributed as dist
 
 logging.basicConfig(
@@ -214,10 +214,10 @@ def main():
 
     if args.baseline:
         from pytorch_transformers.modeling_bert import BertConfig
-        from vilbert.basebert import BaseBertForVLTasks
+        from src.models.basebert import BaseBertForVLTasks
     else:
-        from vilbert.vilbert import BertConfig
-        from vilbert.vilbert import VILBertForVLTasks
+        from src.models.vilbert import BertConfig
+        from src.models.vilbert import VILBertForVLTasks
 
     name = task_cfg["name"]
     task_lr = task_cfg["lr"]
@@ -278,7 +278,7 @@ def main():
 
     # load dataset
     task_batch_size, task_num_iters, task_datasets_train, task_datasets_val, task_dataloader_train, task_dataloader_val = LoadDatasets(
-        args, task_cfg
+        args, task_cfg, split="train"
     )
 
     logdir = os.path.join(savePath, "logs")
@@ -315,8 +315,7 @@ def main():
         threshold=0.001,
     )
 
-    task_ave_iter_list = sorted(task_ave_iter.values())
-    median_num_iter = task_ave_iter_list[-1]
+    median_num_iter = task_ave_iter
     num_train_optimization_steps = (
         median_num_iter * args.num_train_epochs // args.gradient_accumulation_steps
     )

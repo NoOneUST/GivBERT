@@ -101,27 +101,12 @@ class VisualEntailmentDataset(Dataset):
         self._padding_index = padding_index
 
         clean_train = "_cleaned" if clean_datasets else ""
-
-        if "roberta" in bert_model:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + "roberta"
-                + "_"
-                + str(max_seq_length)
-                + clean_train
-                + ".pkl",
-            )
-        else:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task + "_" + split + "_" + str(max_seq_length) + clean_train + ".pkl",
-            )
+        
+        cache_path = os.path.join(
+            dataroot,
+            "cache",
+            task + "_" + split + "_" + str(max_seq_length) + clean_train + ".pkl",
+        )
 
         if not os.path.exists(cache_path):
             self.entries = _load_dataset(dataroot, split, clean_datasets)

@@ -12,8 +12,8 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from pytorch_transformers.tokenization_bert import BertTokenizer
-from vilbert.datasets import VisualEntailmentDataset
-from vilbert.datasets._image_features_reader import ImageFeaturesH5Reader
+from .datasets import VisualEntailmentDataset
+from .datasets._image_features_reader import ImageFeaturesH5Reader
 import pdb
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,7 @@ def LoadDatasets(args, task_cfg, split="trainval"):
 
     task_datasets_train = None
     if "train" in split:
+        print("LOAD TRAIN DATASET")
         task_datasets_train = VisualEntailmentDataset(
             task=task_cfg["name"],
             dataroot=task_cfg["dataroot"],
@@ -89,10 +90,11 @@ def LoadDatasets(args, task_cfg, split="trainval"):
             max_seq_length=task_cfg["max_seq_length"],
             max_region_num=task_cfg["max_region_num"],
         )
+        print(task_datasets_train)
 
     task_datasets_val = None
     if "val" in split:
-        task_datasets_val = DatasetMapTrain[task_name](
+        task_datasets_val = VisualEntailmentDataset(
             task=task_cfg["name"],
             dataroot=task_cfg["dataroot"],
             annotations_jsonpath=task_cfg["val_annotations_jsonpath"],
@@ -113,6 +115,7 @@ def LoadDatasets(args, task_cfg, split="trainval"):
 
 
     if "train" in split:
+        print("LOAD TRAIN DATALOADER")
         if args.local_rank == -1:
             train_sampler = RandomSampler(task_datasets_train)
         else:
