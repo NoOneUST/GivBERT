@@ -17,7 +17,7 @@ conda install pytorch torchvision cudatoolkit=10.1 -c pytorch
 
 ## Data Setup
 To setup the data, you can either download the data provided by [vilbert-multi-task](https://github.com/facebookresearch/vilbert-multi-task/tree/master/data), or download from Google Drive which is a pruned-version especially for this project.
-```
+```text
 TBC
 ```
 
