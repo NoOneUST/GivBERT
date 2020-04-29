@@ -278,7 +278,7 @@ def main():
 
     # load dataset
     task_batch_size, task_num_iters, task_datasets_train, task_datasets_val, task_dataloader_train, task_dataloader_val = LoadDatasets(
-        args, task_cfg, split="train"
+        args, task_cfg
     )
 
     logdir = os.path.join(savePath, "logs")
@@ -440,6 +440,9 @@ def main():
         del checkpoint
 
     model.to(device)
+
+    print("`==============`MODEL=============")
+    print(next(model.parameters()).is_cuda)#False
 
     for state in optimizer.state.values():
         for k, v in state.items():

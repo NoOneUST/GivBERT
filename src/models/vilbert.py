@@ -159,7 +159,6 @@ class BertConfig(object):
         objective=0,
         num_negative=128,
         model="bert",
-        task_specific_tokens=False,
         visualization=False,
     ):
 
@@ -236,7 +235,6 @@ class BertConfig(object):
             self.with_coattention = with_coattention
             self.objective = objective
             self.num_negative = num_negative
-            self.task_specific_tokens = task_specific_tokens
             self.visualization = visualization
         else:
             raise ValueError(
@@ -302,7 +300,6 @@ class BertEmbeddings(nn.Module):
     def __init__(self, config):
         super(BertEmbeddings, self).__init__()
 
-        self.task_specific_tokens = config.task_specific_tokens
         self.word_embeddings = nn.Embedding(
             config.vocab_size, config.hidden_size, padding_idx=0
         )
@@ -318,10 +315,7 @@ class BertEmbeddings(nn.Module):
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-        if self.task_specific_tokens:
-            self.task_embeddings = nn.Embedding(20, config.hidden_size)
-
-    def forward(self, input_ids, token_type_ids=None, task_ids=None, position_ids=None):
+    def forward(self, input_ids, token_type_ids=None, position_ids=None):
 
         seq_length = input_ids.size(1)
         position_ids = torch.arange(
@@ -332,12 +326,6 @@ class BertEmbeddings(nn.Module):
         position_embeddings = self.position_embeddings(position_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
         embeddings = words_embeddings + position_embeddings + token_type_embeddings
-
-        if self.task_specific_tokens:
-            task_embeddings = self.task_embeddings(task_ids)
-            embeddings = torch.cat(
-                [embeddings[:, 0:1], task_embeddings, embeddings[:, 1:]], dim=1
-            )
 
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
@@ -1245,8 +1233,6 @@ class BertModel(BertPreTrainedModel):
         if config.model == "bert":
             self.embeddings = BertEmbeddings(config)
 
-        self.task_specific_tokens = config.task_specific_tokens
-
         # initlize the vision embedding
         self.v_embeddings = BertImageEmbeddings(config)
 
@@ -1265,7 +1251,6 @@ class BertModel(BertPreTrainedModel):
         attention_mask=None,
         image_attention_mask=None,
         co_attention_mask=None,
-        task_ids=None,
         output_all_encoded_layers=False,
         output_all_attention_masks=False,
     ):
@@ -1277,11 +1262,6 @@ class BertModel(BertPreTrainedModel):
             image_attention_mask = torch.ones(
                 input_imgs.size(0), input_imgs.size(1)
             ).type_as(input_txt)
-
-        if self.task_specific_tokens:
-            # extend the mask
-            mask_tokens = input_txt.new().resize_(input_txt.size(0), 1).fill_(1)
-            attention_mask = torch.cat([mask_tokens, attention_mask], dim=1)
 
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
@@ -1324,7 +1304,7 @@ class BertModel(BertPreTrainedModel):
             dtype=next(self.parameters()).dtype
         )  # fp16 compatibility
 
-        embedding_output = self.embeddings(input_txt, token_type_ids, task_ids)
+        embedding_output = self.embeddings(input_txt, token_type_ids)
         v_embedding_output = self.v_embeddings(input_imgs, image_loc)
         encoded_layers_t, encoded_layers_v, all_attention_mask = self.encoder(
             embedding_output,
@@ -1429,7 +1409,6 @@ class VILBertForVLTasks(BertPreTrainedModel):
         attention_mask=None,
         image_attention_mask=None,
         co_attention_mask=None,
-        task_ids=None,
         output_all_encoded_layers=False,
         output_all_attention_masks=False,
     ):
@@ -1442,7 +1421,6 @@ class VILBertForVLTasks(BertPreTrainedModel):
             attention_mask,
             image_attention_mask,
             co_attention_mask,
-            task_ids,
             output_all_encoded_layers=output_all_encoded_layers,
             output_all_attention_masks=output_all_attention_masks,
         )

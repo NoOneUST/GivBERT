@@ -70,7 +70,6 @@ def LoadDatasets(args, task_cfg, split="trainval"):
     )
 
     if "train" in split:
-        print("LOAD TRAIN DATASET")
         task_dataset_train = VisualEntailmentDataset(
             task=task_cfg["name"],
             dataroot=task_cfg["dataroot"],
@@ -112,7 +111,6 @@ def LoadDatasets(args, task_cfg, split="trainval"):
 
 
     if "train" in split:
-        print("LOAD TRAIN DATALOADER")
         if args.local_rank == -1:
             train_sampler = RandomSampler(task_dataset_train)
         else:
@@ -254,9 +252,12 @@ def ForwardModelsTrain(
     batch = task_iter_train.next()
     batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch)
 
+    features, spatials, image_mask, question, target, input_mask, segment_ids, co_attention_mask, question_id = (
+        batch
+    )
+
     batch_size = features.size(0)
 
-    task_tokens = question.new().resize_(question.size(0), 1).fill_(int(task_id[4:]))
     vil_prediction, vil_prediction_gqa, vil_logit, vil_binary_prediction, vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
         question,
         features,
@@ -265,7 +266,6 @@ def ForwardModelsTrain(
         input_mask,
         image_mask,
         co_attention_mask,
-        task_tokens,
     )
 
     loss = task_losses(vil_tri_prediction, target)
@@ -279,8 +279,11 @@ def ForwardModelsTrain(
 def ForwardModelsVal(args, task_cfg, device, batch, model, task_losses):
     batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch)
 
+    features, spatials, image_mask, question, target, input_mask, segment_ids, co_attention_mask, question_id = (
+        batch
+    )
+
     batch_size = features.size(0)
-    task_tokens = question.new().resize_(question.size(0), 1).fill_(int(task_id[4:]))
 
     vil_prediction, vil_prediction_gqa, vil_logit, vil_binary_prediction, vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
         question,
@@ -290,7 +293,6 @@ def ForwardModelsVal(args, task_cfg, device, batch, model, task_losses):
         input_mask,
         image_mask,
         co_attention_mask,
-        task_tokens,
     )
 
     loss = task_losses(vil_tri_prediction, target)
@@ -303,3 +305,46 @@ def ForwardModelsVal(args, task_cfg, device, batch, model, task_losses):
 def LoadLosses(args, task_cfg):
     losses = LossMap[task_cfg["loss"]]
     return losses
+
+def compute_score_with_logits(logits, labels):
+    logits = torch.max(logits, 1)[1].data  # argmax
+    one_hots = torch.zeros(*labels.size()).cuda()
+    one_hots.scatter_(1, logits.view(-1, 1), 1)
+    scores = one_hots * labels
+    return scores
+
+
+def EvaluatingModel(
+    args,
+    task_cfg,
+    device,
+    batch,
+    model,
+    task_dataloader,
+    task_loss,
+    results,
+    others,
+):
+    batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch)
+    features, spatials, image_mask, question, target, input_mask, segment_ids, co_attention_mask, question_id = (
+        batch
+    )
+    batch_size = features.size(0)
+
+
+    with torch.no_grad():
+        vil_prediction, vil_prediction_gqa, vil_logit, vil_binary_prediction, vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
+            question,
+            features,
+            spatials,
+            segment_ids,
+            input_mask,
+            image_mask,
+            co_attention_mask,
+        )
+
+    loss = task_loss(vil_tri_prediction, target)
+    loss = loss.mean()
+    batch_score = compute_score_with_logits(vil_tri_prediction, target).sum()
+
+    return float(loss), float(batch_score), batch_size, results, others
