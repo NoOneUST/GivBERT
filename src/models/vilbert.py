@@ -159,6 +159,7 @@ class BertConfig(object):
         objective=0,
         num_negative=128,
         model="bert",
+        task_specific_tokens=False,
         visualization=False,
     ):
 
@@ -235,6 +236,7 @@ class BertConfig(object):
             self.with_coattention = with_coattention
             self.objective = objective
             self.num_negative = num_negative
+            self.task_specific_tokens = task_specific_tokens
             self.visualization = visualization
         else:
             raise ValueError(
@@ -300,6 +302,7 @@ class BertEmbeddings(nn.Module):
     def __init__(self, config):
         super(BertEmbeddings, self).__init__()
 
+        self.task_specific_tokens = config.task_specific_tokens
         self.word_embeddings = nn.Embedding(
             config.vocab_size, config.hidden_size, padding_idx=0
         )
@@ -315,7 +318,10 @@ class BertEmbeddings(nn.Module):
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, input_ids, token_type_ids=None, position_ids=None):
+        if self.task_specific_tokens:
+            self.task_embeddings = nn.Embedding(20, config.hidden_size)
+
+    def forward(self, input_ids, token_type_ids=None, task_ids=None, position_ids=None):
 
         seq_length = input_ids.size(1)
         position_ids = torch.arange(
@@ -326,6 +332,12 @@ class BertEmbeddings(nn.Module):
         position_embeddings = self.position_embeddings(position_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
         embeddings = words_embeddings + position_embeddings + token_type_embeddings
+
+        if self.task_specific_tokens:
+            task_embeddings = self.task_embeddings(task_ids)
+            embeddings = torch.cat(
+                [embeddings[:, 0:1], task_embeddings, embeddings[:, 1:]], dim=1
+            )
 
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
@@ -1135,32 +1147,10 @@ class BertLMPredictionHead(nn.Module):
         hidden_states = self.decoder(hidden_states) + self.bias
         return hidden_states
 
-
-# class BertOnlyMLMHead(nn.Module):
-#     def __init__(self, config, bert_model_embedding_weights):
-#         super(BertOnlyMLMHead, self).__init__()
-#         self.predictions = BertLMPredictionHead(config, bert_model_embedding_weights)
-
-#     def forward(self, sequence_output):
-#         prediction_scores = self.predictions(sequence_output)
-#         return prediction_scores
-
-
-# class BertOnlyNSPHead(nn.Module):
-#     def __init__(self, config):
-#         super(BertOnlyNSPHead, self).__init__()
-#         self.seq_relationship = nn.Linear(config.hidden_size, 2)
-
-#     def forward(self, pooled_output):
-#         seq_relationship_score = self.seq_relationship(pooled_output)
-#         return seq_relationship_score
-
-
 class BertPreTrainingHeads(nn.Module):
     def __init__(self, config, bert_model_embedding_weights):
         super(BertPreTrainingHeads, self).__init__()
         self.predictions = BertLMPredictionHead(config, bert_model_embedding_weights)
-        self.bi_seq_relationship = nn.Linear(config.bi_hidden_size, 2)
         self.imagePredictions = BertImagePredictionHead(config)
         self.fusion_method = config.fusion_method
         self.dropout = nn.Dropout(0.1)
@@ -1177,10 +1167,9 @@ class BertPreTrainingHeads(nn.Module):
             assert False
 
         prediction_scores_t = self.predictions(sequence_output_t)
-        seq_relationship_score = self.bi_seq_relationship(pooled_output)
         prediction_scores_v = self.imagePredictions(sequence_output_v)
 
-        return prediction_scores_t, prediction_scores_v, seq_relationship_score
+        return prediction_scores_t, prediction_scores_v
 
 
 class BertImagePredictionHead(nn.Module):
@@ -1233,6 +1222,8 @@ class BertModel(BertPreTrainedModel):
         if config.model == "bert":
             self.embeddings = BertEmbeddings(config)
 
+        self.task_specific_tokens = config.task_specific_tokens
+
         # initlize the vision embedding
         self.v_embeddings = BertImageEmbeddings(config)
 
@@ -1251,6 +1242,7 @@ class BertModel(BertPreTrainedModel):
         attention_mask=None,
         image_attention_mask=None,
         co_attention_mask=None,
+        task_ids=None,
         output_all_encoded_layers=False,
         output_all_attention_masks=False,
     ):
@@ -1262,6 +1254,11 @@ class BertModel(BertPreTrainedModel):
             image_attention_mask = torch.ones(
                 input_imgs.size(0), input_imgs.size(1)
             ).type_as(input_txt)
+
+        if self.task_specific_tokens:
+            # extend the mask
+            mask_tokens = input_txt.new().resize_(input_txt.size(0), 1).fill_(1)
+            attention_mask = torch.cat([mask_tokens, attention_mask], dim=1)
 
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
@@ -1304,7 +1301,7 @@ class BertModel(BertPreTrainedModel):
             dtype=next(self.parameters()).dtype
         )  # fp16 compatibility
 
-        embedding_output = self.embeddings(input_txt, token_type_ids)
+        embedding_output = self.embeddings(input_txt, token_type_ids, task_ids)
         v_embedding_output = self.v_embeddings(input_imgs, image_loc)
         encoded_layers_t, encoded_layers_v, all_attention_mask = self.encoder(
             embedding_output,
@@ -1356,7 +1353,6 @@ class BertImageEmbeddings(nn.Module):
         # TODO: we want to make the padding_idx == 0, however, with custom initilization, it seems it will have a bias.
         # Let's do masking for now
         embeddings = self.LayerNorm(img_embeddings + loc_embeddings)
-        # embeddings = self.LayerNorm(img_embeddings+loc_embeddings)
         embeddings = self.dropout(embeddings)
 
         return embeddings
@@ -1372,16 +1368,6 @@ class VILBertForVLTasks(BertPreTrainedModel):
         self.cls = BertPreTrainingHeads(
             config, self.bert.embeddings.word_embeddings.weight
         )
-        self.vil_prediction = SimpleClassifier(
-            config.bi_hidden_size, config.bi_hidden_size * 2, 3129, 0.5
-        )
-        self.vil_prediction_gqa = SimpleClassifier(
-            config.bi_hidden_size, config.bi_hidden_size * 2, 1533, 0.5
-        )
-        self.vil_binary_prediction = SimpleClassifier(
-            config.bi_hidden_size * 2, config.bi_hidden_size * 2, 2, 0.5
-        )
-        self.vil_logit = nn.Linear(config.bi_hidden_size, 1)
         self.vil_tri_prediction = nn.Linear(
             config.bi_hidden_size, 3
         )  # for Visual Entailiment tasks
@@ -1391,6 +1377,11 @@ class VILBertForVLTasks(BertPreTrainedModel):
         self.apply(self.init_weights)
 
         self.tie_weights()
+
+        for p in [
+            *self.bert.parameters(),
+            ]:
+                p.requires_grad=False
 
     def tie_weights(self):
         """ Make sure we are sharing the input and output embeddings.
@@ -1409,6 +1400,7 @@ class VILBertForVLTasks(BertPreTrainedModel):
         attention_mask=None,
         image_attention_mask=None,
         co_attention_mask=None,
+        task_ids=None,
         output_all_encoded_layers=False,
         output_all_attention_masks=False,
     ):
@@ -1421,19 +1413,17 @@ class VILBertForVLTasks(BertPreTrainedModel):
             attention_mask,
             image_attention_mask,
             co_attention_mask,
+            task_ids,
             output_all_encoded_layers=output_all_encoded_layers,
             output_all_attention_masks=output_all_attention_masks,
         )
 
-        vil_prediction = 0
-        vil_logit = 0
-        vil_binary_prediction = 0
         vision_prediction = 0
         vision_logit = 0
         linguisic_prediction = 0
         linguisic_logit = 0
 
-        linguisic_prediction, vision_prediction, vil_binary_prediction = self.cls(
+        linguisic_prediction, vision_prediction = self.cls(
             sequence_output_t, sequence_output_v, pooled_output_t, pooled_output_v
         )
 
@@ -1444,13 +1434,6 @@ class VILBertForVLTasks(BertPreTrainedModel):
         else:
             assert False
 
-        vil_prediction = self.vil_prediction(pooled_output)
-        vil_prediction_gqa = self.vil_prediction_gqa(pooled_output)
-        if pooled_output.size(0) % 2 == 0:
-            vil_binary_prediction = self.vil_binary_prediction(
-                pooled_output.view(-1, pooled_output.size(1) * 2)
-            )
-        vil_logit = self.vil_logit(pooled_output)
         vil_tri_prediction = self.vil_tri_prediction(pooled_output)
         vision_logit = self.vision_logit(self.dropout(sequence_output_v)) + (
             (1.0 - image_attention_mask) * -10000.0
@@ -1458,10 +1441,6 @@ class VILBertForVLTasks(BertPreTrainedModel):
         linguisic_logit = self.linguisic_logit(self.dropout(sequence_output_t))
 
         return (
-            vil_prediction,
-            vil_prediction_gqa,
-            vil_logit,
-            vil_binary_prediction,
             vil_tri_prediction,
             vision_prediction,
             vision_logit,

@@ -258,7 +258,7 @@ def ForwardModelsTrain(
 
     batch_size = features.size(0)
 
-    vil_prediction, vil_prediction_gqa, vil_logit, vil_binary_prediction, vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
+    vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
         question,
         features,
         spatials,
@@ -285,7 +285,7 @@ def ForwardModelsVal(args, task_cfg, device, batch, model, task_losses):
 
     batch_size = features.size(0)
 
-    vil_prediction, vil_prediction_gqa, vil_logit, vil_binary_prediction, vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
+    vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
         question,
         features,
         spatials,
@@ -333,7 +333,7 @@ def EvaluatingModel(
 
 
     with torch.no_grad():
-        vil_prediction, vil_prediction_gqa, vil_logit, vil_binary_prediction, vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
+        vil_tri_prediction, vision_prediction, vision_logit, linguisic_prediction, linguisic_logit, _ = model(
             question,
             features,
             spatials,
