@@ -469,7 +469,7 @@ def main():
 
     task_iter_train = None
     task_count = 0
-    for epochId in tqdm(range(start_epoch, args.num_train_epochs), desc="Epoch"):
+    for epochId in tqdm(range(start_epoch, args.num_train_epochs), desc="Epoch", ncols=100):
         model.train()
         for step in range(median_num_iter):
             iterId = startIterID + step + (epochId * median_num_iter)
@@ -619,7 +619,7 @@ def evaluate(
             sys.stdout.flush()
 
     # update the multi-task scheduler.
-    task_stop_controllerstep(tbLogger.getValScore())
+    task_stop_controller.step(tbLogger.getValScore())
     score = tbLogger.showLossVal(task_stop_controller)
     model.train()
 
