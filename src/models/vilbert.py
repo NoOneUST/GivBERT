@@ -302,7 +302,6 @@ class BertEmbeddings(nn.Module):
     def __init__(self, config):
         super(BertEmbeddings, self).__init__()
 
-        self.task_specific_tokens = config.task_specific_tokens
         self.word_embeddings = nn.Embedding(
             config.vocab_size, config.hidden_size, padding_idx=0
         )
@@ -318,9 +317,6 @@ class BertEmbeddings(nn.Module):
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-        if self.task_specific_tokens:
-            self.task_embeddings = nn.Embedding(20, config.hidden_size)
-
     def forward(self, input_ids, token_type_ids=None, task_ids=None, position_ids=None):
 
         seq_length = input_ids.size(1)
@@ -329,15 +325,10 @@ class BertEmbeddings(nn.Module):
         )
         position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
         words_embeddings = self.word_embeddings(input_ids)
-        position_embeddings = self.position_embeddings(position_ids)
-        token_type_embeddings = self.token_type_embeddings(token_type_ids)
-        embeddings = words_embeddings + position_embeddings + token_type_embeddings
-
-        if self.task_specific_tokens:
-            task_embeddings = self.task_embeddings(task_ids)
-            embeddings = torch.cat(
-                [embeddings[:, 0:1], task_embeddings, embeddings[:, 1:]], dim=1
-            )
+        embeddings = words_embeddings
+        # position_embeddings = self.position_embeddings(position_ids)
+        # token_type_embeddings = self.token_type_embeddings(token_type_ids)
+        # embeddings = words_embeddings + position_embeddings + token_type_embeddings
 
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
@@ -1341,18 +1332,19 @@ class BertImageEmbeddings(nn.Module):
         super(BertImageEmbeddings, self).__init__()
 
         self.image_embeddings = nn.Linear(config.v_feature_size, config.v_hidden_size)
-        self.image_location_embeddings = nn.Linear(5, config.v_hidden_size)
+        # self.image_location_embeddings = nn.Linear(5, config.v_hidden_size)
         self.LayerNorm = BertLayerNorm(config.v_hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, input_ids, input_loc):
 
         img_embeddings = self.image_embeddings(input_ids)
-        loc_embeddings = self.image_location_embeddings(input_loc)
+        # loc_embeddings = self.image_location_embeddings(input_loc)
 
         # TODO: we want to make the padding_idx == 0, however, with custom initilization, it seems it will have a bias.
         # Let's do masking for now
-        embeddings = self.LayerNorm(img_embeddings + loc_embeddings)
+        # embeddings = self.LayerNorm(img_embeddings + loc_embeddings)
+        embeddings = self.LayerNorm(img_embeddings)
         embeddings = self.dropout(embeddings)
 
         return embeddings
