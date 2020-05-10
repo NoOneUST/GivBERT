@@ -12,7 +12,7 @@ pip install -r requirements.txt
 ```
 3. Install pytorch, please check your CUDA version
 ```
-conda install pytorch torchvision cudatoolkit=10.1 -c pytorch
+conda install pytorch==1.4 torchvision cudatoolkit=10.1 -c pytorch
 ```
 
 ## Data Setup
