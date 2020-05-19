@@ -3,7 +3,7 @@ Part of the code is modified from Github repo [vilbert-multi-task](https://githu
 
 ## Introduction
 
-[![GivBERT](https://imgur.com/hnx74Ms)](https://youtu.be/dY5pY9iRLMg "GivBERT") 
+[![GivBERT](https://i.imgur.com/hnx74Ms.png)](https://youtu.be/dY5pY9iRLMg "GivBERT") 
 
 ## Setup
 1. Download the repository from Github
