@@ -16,6 +16,11 @@ cd  COMP5212Project
 pip install -r requirements.txt
 ```
 3. Install pytorch, please check your CUDA version
+If you want to run GivBERT, we recommend cuda 10.2 and
+```
+pip install pytorch==1.5 torchvision==0.6
+```
+If you want to run VilBERT, use
 ```
 conda install pytorch==1.4 torchvision cudatoolkit=10.1 -c pytorch
 ```
