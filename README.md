@@ -35,9 +35,13 @@ To get move on, you need to download the pre-trained VilBERT models for [12-in-1
 
 ## Working directory
 ### GivBERT
+```
 cd ./GivBERT
+```
 ### VilBERT
+```
 cd ./
+```
 
 ## Command lines for experiments
 ```
