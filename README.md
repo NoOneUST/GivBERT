@@ -1,9 +1,13 @@
+---
+youtubeId: dY5pY9iRLMg
+---
+
 # COMP5212 Visual Emtailment
 Part of the code is modified from Github repo [vilbert-multi-task](https://github.com/facebookresearch/vilbert-multi-task).
 
 ## Introduction
 
-{% include youtubePlayer.html id="dY5pY9iRLMg" %}
+{% include youtubePlayer.html id=page.youtubeId %}
 
 https://youtu.be/dY5pY9iRLMg
 
