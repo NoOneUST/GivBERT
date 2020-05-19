@@ -1,4 +1,4 @@
-# COMP5212 Visual Emtailment
+# COMP5212 Visual Entailment - GivBERT
 Part of the code is modified from Github repo [vilbert-multi-task](https://github.com/facebookresearch/vilbert-multi-task).
 
 ## Video Introduction
