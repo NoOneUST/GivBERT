@@ -1,7 +1,7 @@
 # COMP5212 Visual Emtailment
 Part of the code is modified from Github repo [vilbert-multi-task](https://github.com/facebookresearch/vilbert-multi-task).
 
-## Introduction
+## Video Introduction
 
 [![GivBERT](https://i.imgur.com/hnx74Ms.png)](https://youtu.be/dY5pY9iRLMg "GivBERT") 
 
@@ -32,6 +32,12 @@ To get move on, you need to download the pre-trained VilBERT models for [12-in-1
 [Download link](https://dl.fbaipublicfiles.com/vilbert-multi-task/pretrained_model.bin)
 ### VilBERT-MT 
 [Download link](https://dl.fbaipublicfiles.com/vilbert-multi-task/multi_task_model.bin)
+
+## Working directory
+### GivBERT
+cd ./GivBERT
+### VilBERT
+cd ./
 
 ## Command lines for experiments
 ```
