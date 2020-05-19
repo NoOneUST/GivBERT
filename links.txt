@@ -1,0 +1,5 @@
+# URL to the data we used
+- In this package, we only used the preprocessed data from flickr30k and SNLI dataset.
+https://dl.fbaipublicfiles.com/vilbert-multi-task/datasets.tar.gz
+
+# URL to the video

@@ -325,10 +325,10 @@ class BertEmbeddings(nn.Module):
         )
         position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
         words_embeddings = self.word_embeddings(input_ids)
-        embeddings = words_embeddings
-        # position_embeddings = self.position_embeddings(position_ids)
-        # token_type_embeddings = self.token_type_embeddings(token_type_ids)
-        # embeddings = words_embeddings + position_embeddings + token_type_embeddings
+        # embeddings = words_embeddings
+        position_embeddings = self.position_embeddings(position_ids)
+        token_type_embeddings = self.token_type_embeddings(token_type_ids)
+        embeddings = words_embeddings + position_embeddings + token_type_embeddings
 
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
@@ -653,20 +653,16 @@ class BertBiAttention(nn.Module):
         )
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        # self.scale = nn.Linear(1, self.num_attention_heads, bias=False)
-        # self.scale_act_fn = ACT2FN['relu']
 
         self.query1 = nn.Linear(config.v_hidden_size, self.all_head_size)
         self.key1 = nn.Linear(config.v_hidden_size, self.all_head_size)
         self.value1 = nn.Linear(config.v_hidden_size, self.all_head_size)
-        # self.logit1 = nn.Linear(config.hidden_size, self.num_attention_heads)
 
         self.dropout1 = nn.Dropout(config.v_attention_probs_dropout_prob)
 
         self.query2 = nn.Linear(config.hidden_size, self.all_head_size)
         self.key2 = nn.Linear(config.hidden_size, self.all_head_size)
         self.value2 = nn.Linear(config.hidden_size, self.all_head_size)
-        # self.logit2 = nn.Linear(config.hidden_size, self.num_attention_heads)
 
         self.dropout2 = nn.Dropout(config.attention_probs_dropout_prob)
 
@@ -692,36 +688,28 @@ class BertBiAttention(nn.Module):
         mixed_query_layer1 = self.query1(input_tensor1)
         mixed_key_layer1 = self.key1(input_tensor1)
         mixed_value_layer1 = self.value1(input_tensor1)
-        # mixed_logit_layer1 = self.logit1(input_tensor1)
 
         query_layer1 = self.transpose_for_scores(mixed_query_layer1)
         key_layer1 = self.transpose_for_scores(mixed_key_layer1)
-        value_layer1 = self.transpose_for_scores(mixed_value_layer1)
-        # logit_layer1 = self.transpose_for_logits(mixed_logit_layer1)
+        value_layer1 = self.transpose_for_scores(mixed_value_layer1)\
 
         # for text input:
         mixed_query_layer2 = self.query2(input_tensor2)
         mixed_key_layer2 = self.key2(input_tensor2)
         mixed_value_layer2 = self.value2(input_tensor2)
-        # mixed_logit_layer2 = self.logit2(input_tensor2)
 
         query_layer2 = self.transpose_for_scores(mixed_query_layer2)
         key_layer2 = self.transpose_for_scores(mixed_key_layer2)
         value_layer2 = self.transpose_for_scores(mixed_value_layer2)
-        # logit_layer2 = self.transpose_for_logits(mixed_logit_layer2)
 
         # Take the dot product between "query2" and "key1" to get the raw attention scores for value 1.
         attention_scores1 = torch.matmul(query_layer2, key_layer1.transpose(-1, -2))
         attention_scores1 = attention_scores1 / math.sqrt(self.attention_head_size)
         attention_scores1 = attention_scores1 + attention_mask1
-        # if use_co_attention_mask:
-        # attention_scores1 = attention_scores1 + co_attention_mask.permute(0,1,3,2)
 
         # Normalize the attention scores to probabilities.
         attention_probs1 = nn.Softmax(dim=-1)(attention_scores1)
 
-        # This is actually dropping out entire tokens to attend to, which might
-        # seem a bit unusual, but is taken from the original Transformer paper.
         attention_probs1 = self.dropout1(attention_probs1)
 
         context_layer1 = torch.matmul(attention_probs1, value_layer1)
@@ -1195,8 +1183,6 @@ class BertPreTrainedModel(PreTrainedModel):
         """ Initialize the weights.
         """
         if isinstance(module, (nn.Linear, nn.Embedding)):
-            # Slightly different from the TF version which uses truncated_normal for initialization
-            # cf https://github.com/pytorch/pytorch/pull/5617
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
         elif isinstance(module, BertLayerNorm):
             module.bias.data.zero_()
@@ -1254,29 +1240,22 @@ class BertModel(BertPreTrainedModel):
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
         # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
-        # this attention mask is more simple than the triangular masking of causal attention
-        # used in OpenAI GPT, we just need to prepare the broadcast dimension here.
         extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
         extended_image_attention_mask = image_attention_mask.unsqueeze(1).unsqueeze(2)
 
         extended_attention_mask2 = attention_mask.unsqueeze(2)
-        # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
-        # masked positions, this operation will create a tensor which is 0.0 for
-        # positions we want to attend and -10000.0 for masked positions.
-        # Since we are adding it to the raw scores before the softmax, this is
-        # effectively the same as removing these entirely.
         extended_attention_mask = extended_attention_mask.to(
             dtype=next(self.parameters()).dtype
-        )  # fp16 compatibility
+        ) 
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
         extended_attention_mask2 = extended_attention_mask2.to(
             dtype=next(self.parameters()).dtype
-        )  # fp16 compatibility
+        ) 
 
         extended_image_attention_mask = extended_image_attention_mask.to(
             dtype=next(self.parameters()).dtype
-        )  # fp16 compatibility
+        ) 
         extended_image_attention_mask = (1.0 - extended_image_attention_mask) * -10000.0
 
         if co_attention_mask is None:
@@ -1286,11 +1265,10 @@ class BertModel(BertPreTrainedModel):
 
         extended_co_attention_mask = co_attention_mask.unsqueeze(1)
 
-        # extended_co_attention_mask = co_attention_mask.unsqueeze(-1)
         extended_co_attention_mask = extended_co_attention_mask * 5.0
         extended_co_attention_mask = extended_co_attention_mask.to(
             dtype=next(self.parameters()).dtype
-        )  # fp16 compatibility
+        )  
 
         embedding_output = self.embeddings(input_txt, token_type_ids, task_ids)
         v_embedding_output = self.v_embeddings(input_imgs, image_loc)
@@ -1332,18 +1310,16 @@ class BertImageEmbeddings(nn.Module):
         super(BertImageEmbeddings, self).__init__()
 
         self.image_embeddings = nn.Linear(config.v_feature_size, config.v_hidden_size)
-        # self.image_location_embeddings = nn.Linear(5, config.v_hidden_size)
+        self.image_location_embeddings = nn.Linear(5, config.v_hidden_size)
         self.LayerNorm = BertLayerNorm(config.v_hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, input_ids, input_loc):
 
         img_embeddings = self.image_embeddings(input_ids)
-        # loc_embeddings = self.image_location_embeddings(input_loc)
+        loc_embeddings = self.image_location_embeddings(input_loc)
 
-        # TODO: we want to make the padding_idx == 0, however, with custom initilization, it seems it will have a bias.
-        # Let's do masking for now
-        # embeddings = self.LayerNorm(img_embeddings + loc_embeddings)
+        embeddings = self.LayerNorm(img_embeddings + loc_embeddings)
         embeddings = self.LayerNorm(img_embeddings)
         embeddings = self.dropout(embeddings)
 
@@ -1454,19 +1430,3 @@ class SimpleClassifier(nn.Module):
 
     def forward(self, hidden_states):
         return self.logit_fc(hidden_states)
-
-
-# class SimpleClassifier(nn.Module):
-#     def __init__(self, in_dim, hid_dim, out_dim, dropout):
-#         super(SimpleClassifier, self).__init__()
-#         layers = [
-#             weight_norm(nn.Linear(in_dim, hid_dim), dim=None),
-#             nn.ReLU(),
-#             nn.Dropout(dropout, inplace=True),
-#             weight_norm(nn.Linear(hid_dim, out_dim), dim=None)
-#         ]
-#         self.main = nn.Sequential(*layers)
-
-#     def forward(self, x):
-#         logits = self.main(x)
-#         return logits
