@@ -8,8 +8,8 @@ Part of the code is modified from Github repo [vilbert-multi-task](https://githu
 ## Setup
 1. Download the repository from Github
 ```
-git clone git@github.com:NoOneUST/COMP5212Project.git
-cd  COMP5212Project
+git clone git@github.com:NoOneUST/COMP5212-Project-GivBERT.git
+cd  COMP5212-Project-GivBERT
 ```
 2. Install the requirements
 ```
