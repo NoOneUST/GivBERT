@@ -3,7 +3,7 @@ Part of the code is modified from Github repo [vilbert-multi-task](https://githu
 
 ## Introduction
 
-[![Everything Is AWESOME](http://i.imgur.com/Ot5DWAW.png)](https://youtu.be/StTqXEQ2l-Y?t=35s "Everything Is AWESOME")
+[![GivBERT](http://i.imgur.com/Ot5DWAW.png)](https://youtu.be/dY5pY9iRLMg "GivBERT")
 
 https://youtu.be/dY5pY9iRLMg
 
