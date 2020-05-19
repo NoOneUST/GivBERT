@@ -2,7 +2,7 @@ import argparse
 import json
 import logging
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 import random
 from io import open
 import numpy as np
@@ -144,7 +144,7 @@ def main():
     parser.add_argument(
         "--num_workers",
         type=int,
-        default=36,
+        default=0,
         help="Number of workers in the dataloader.",
     )
     parser.add_argument(
