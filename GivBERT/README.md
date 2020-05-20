@@ -1,18 +1,29 @@
-# COMP5212 Visual Emtailment
+# COMP5212 Visual Entailment - GivBERT
 Part of the code is modified from Github repo [vilbert-multi-task](https://github.com/facebookresearch/vilbert-multi-task).
+
+## Video Introduction
+
+[![GivBERT](https://i.imgur.com/hnx74Ms.png)](https://youtu.be/dY5pY9iRLMg "GivBERT") 
+
 ## Setup
 1. Download the repository from Github
 ```
-git clone git@github.com:NoOneUST/COMP5212Project.git
-cd  COMP5212Project
+git clone git@github.com:NoOneUST/COMP5212-Project-GivBERT.git
+cd  COMP5212-Project-GivBERT
 ```
 2. Install the requirements
 ```
 pip install -r requirements.txt
 ```
 3. Install pytorch, please check your CUDA version
+
+If you want to run GivBERT, we recommend cuda 10.2 and
 ```
-conda install pytorch torchvision cudatoolkit=10.1 -c pytorch
+pip install pytorch==1.5 torchvision==0.6
+```
+If you want to run VilBERT, use
+```
+conda install pytorch==1.4 torchvision cudatoolkit=10.1 -c pytorch
 ```
 
 ## Data Setup
@@ -27,6 +38,16 @@ To get move on, you need to download the pre-trained VilBERT models for [12-in-1
 [Download link](https://dl.fbaipublicfiles.com/vilbert-multi-task/pretrained_model.bin)
 ### VilBERT-MT 
 [Download link](https://dl.fbaipublicfiles.com/vilbert-multi-task/multi_task_model.bin)
+
+## Working directory
+### GivBERT
+```
+cd ./GivBERT
+```
+### VilBERT
+```
+cd ./
+```
 
 ## Command lines for experiments
 ```
